@@ -368,6 +368,29 @@ export function calculateTargets(inputs: TargetInputs): Targets {
   };
 }
 
+/**
+ * The youngest anybody may be to use this app, as the terms and the privacy
+ * policy both say. A calorie tracker is a poor thing to hand a child, and in
+ * most of the EU a child under this age cannot consent to their health data
+ * being processed at all.
+ *
+ * Enforced three times: by the onboarding form, by `PATCH /profile`, and by the
+ * journal, which stops answering an account that has told it it is younger.
+ */
+export const MIN_AGE = 16;
+
+/** Whether a birth date is on the wrong side of `MIN_AGE`. False when there is none. */
+export function underMinAge(birthDate: string | null): boolean {
+  const age = ageFrom(birthDate);
+  return age !== null && age < MIN_AGE;
+}
+
+/** The latest birth date `MIN_AGE` allows, as YYYY-MM-DD — for a date input's `max`. */
+export function latestBirthDate(now = new Date()): string {
+  const y = now.getUTCFullYear() - MIN_AGE;
+  return `${y}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+}
+
 export function ageFrom(birthDate: string | null): number | null {
   if (!birthDate) return null;
   const born = new Date(birthDate);

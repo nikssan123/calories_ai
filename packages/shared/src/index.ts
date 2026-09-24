@@ -4577,6 +4577,10 @@ export const AdminUser = z.object({
   last_entry_at: z.string().nullable(),
   ai_turns: z.number(),
   ai_cost_usd: z.number(),
+  /** An age under 16 they told the journal, or null. See migration 069. */
+  stated_age: z.number().nullable(),
+  /** Their age by the birth date the form was given, or null if none. */
+  age: z.number().nullable(),
 });
 export type AdminUser = z.infer<typeof AdminUser>;
 

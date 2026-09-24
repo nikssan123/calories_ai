@@ -277,7 +277,7 @@ export const hu: Messages = {
   'ob.birthTitle': 'Mikor születtél?',
   'ob.birthBody': 'Az életkor az utolsó, ami a számításhoz kell.',
   'ob.birthAge': (count: number) => n(count, { one: 'éves', other: 'éves' }),
-  'ob.birthTooYoung': 'Az alkalmazás 13 éves kortól használható.',
+  'ob.birthTooYoung': 'Az alkalmazás 16 éves kortól használható.',
   'ob.birthImplausible': 'Nézd meg az évet – ez a dátum furcsának tűnik.',
 
   'ob.bodyTitle': 'Magasság és testsúly',

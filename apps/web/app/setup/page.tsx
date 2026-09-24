@@ -20,6 +20,7 @@ import {
   cmToFeetInches,
   feetInchesToCm,
   formatNumber,
+  latestBirthDate,
   targetInputsChanged,
   toBodyWeight,
   localeOf,
@@ -325,6 +326,7 @@ export default function SetupPage() {
             <Input
               type="date"
               value={profile.birth_date ?? ''}
+              max={latestBirthDate()}
               onChange={(e) => patch('birth_date', e.target.value || null)}
               // The native picker is drawn by the browser, not by us; it reads
               // `color-scheme` off <html>, which <ThemeSync> now sets.

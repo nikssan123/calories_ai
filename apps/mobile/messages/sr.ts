@@ -285,7 +285,7 @@ export const sr: Messages = {
   'ob.birthTitle': 'Који је твој датум рођења?',
   'ob.birthBody': 'Године су последње што је потребно за рачун потрошње.',
   'ob.birthAge': (count: number) => n(count, { one: 'година', few: 'године', other: 'година' }),
-  'ob.birthTooYoung': 'Апликација је за узраст од 13 година навише.',
+  'ob.birthTooYoung': 'Апликација је за узраст од 16 година навише.',
   'ob.birthImplausible': 'Провери годину — тај датум не изгледа добро.',
 
   'ob.bodyTitle': 'Твоја висина и тежина',

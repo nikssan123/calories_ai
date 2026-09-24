@@ -1,3 +1,5 @@
+import { MIN_AGE } from '@ct/shared';
+
 /**
  * The floor under every birth-date wheel.
  *
@@ -15,3 +17,13 @@
  * implausible birthday gets its sentence, and that check has to stay reachable.
  */
 export const BIRTH_DATE_FLOOR = new Date(1900, 0, 1);
+
+/**
+ * The latest birthday the You tab's wheel offers: `MIN_AGE` years ago today.
+ * The server refuses anything later, so a wheel that reached it would only be
+ * offering a save that fails. Onboarding keeps today as its bound, because
+ * there the refusal is a sentence under the wheel saying why.
+ */
+export function birthDateCeiling(now = new Date()): Date {
+  return new Date(now.getFullYear() - MIN_AGE, now.getMonth(), now.getDate());
+}

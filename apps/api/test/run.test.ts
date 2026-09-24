@@ -990,3 +990,33 @@ describe('packets scanned into the message', () => {
     expect(userTurnOf(agentCalls[0]!)).toContain('2 packets were also scanned');
   });
 });
+
+describe('an account under 16', () => {
+  it('is answered in writing, in their language, without calling the model', async () => {
+    await query(`UPDATE users SET stated_age = 9, locale = 'bg' WHERE id = $1`, [user.id]);
+    scriptAgent({ text: 'should never be sent', sessionId: 's' });
+    const calls = agentCalls.length;
+
+    const response = await turn('какво да ям утре');
+
+    expect(agentCalls.length).toBe(calls);
+    expect(response.message.content).toContain('16');
+    expect(response.message.content).toContain('мама');
+    expect(response.actions).toEqual([]);
+    const messages = await listMessages(user.id);
+    expect(messages.map((m) => m.content)).toContain('какво да ям утре');
+  });
+
+  it('is recognised from the birth date alone', async () => {
+    await query(`UPDATE users SET birth_date = $2 WHERE id = $1`, [
+      user.id,
+      `${new Date().getUTCFullYear() - 14}-01-01`,
+    ]);
+    const calls = agentCalls.length;
+
+    const response = await turn();
+
+    expect(agentCalls.length).toBe(calls);
+    expect(response.message.content).toContain('16 and over');
+  });
+});

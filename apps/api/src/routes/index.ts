@@ -13,12 +13,14 @@ import {
   localeOf,
   Meal,
   METERS,
+  MIN_AGE,
   PhotoUploadRequest,
   SaveRoutineRequest,
   SaveScheduleRequest,
   ProfileUpdate,
   RepeatRequest,
   SyncStepsRequest,
+  underMinAge,
   WorkoutRequest,
   type Allowance,
   type Entitlements,
@@ -1378,6 +1380,10 @@ export async function registerRoutes(app: FastifyInstance) {
   app.patch('/profile', async (request, reply) => {
     const parsed = ProfileUpdate.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid profile' });
+    // The pickers stop at `MIN_AGE` already; this is for everything that is not a picker.
+    if (parsed.data.birth_date && underMinAge(parsed.data.birth_date)) {
+      return reply.status(422).send({ error: `Day So Far is for people ${MIN_AGE} and over.` });
+    }
 
     const userId = request.userId!;
     // Read before the write: `retargetFromProfile` needs to know which of the

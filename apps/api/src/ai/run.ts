@@ -10,6 +10,7 @@ import {
   listMessages,
   listReplayWindow,
 } from '../services/chat.ts';
+import { isUnderAge, underAgeReply } from '../services/age.ts';
 import { latestWeight } from '../services/log.ts';
 import { listNotes } from '../services/notes.ts';
 import { buildDaySummary } from '../services/summary.ts';
@@ -112,6 +113,8 @@ export async function runTurn(input: RunTurnInput, emit?: StreamSink): Promise<C
 async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<ChatResponse> {
   const now = new Date();
   const today = localDateFor(now, input.ctx);
+
+  if (await isUnderAge(input.profile)) return underAgeTurn(input, today);
 
   const actions: ChatAction[] = [];
   const toolContext: ToolContext = {
@@ -491,6 +494,33 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     day: updatedDay,
     profile: updatedProfile,
     allowance: spend(input.allowance, metered),
+  };
+}
+
+/**
+ * A turn from somebody the app knows is under `MIN_AGE`: their message kept,
+ * and the same written reply every time, with no model and no tools.
+ *
+ * Kept in the conversation rather than refused with an error, so what they
+ * said stays readable in the admin panel and they see an answer instead of a
+ * failure. Nothing is logged and nothing is spent.
+ */
+async function underAgeTurn(input: RunTurnInput, today: string): Promise<ChatResponse> {
+  const userMessage = await insertMessage(input.userId, 'user', input.text, input.photo?.id ?? null);
+  const message = await insertMessage(
+    input.userId,
+    'assistant',
+    underAgeReply(input.profile, input.spokenLocale),
+    null,
+    { kind: 'under_age' },
+  );
+  return {
+    message,
+    user_message: userMessage,
+    actions: [],
+    day: await buildDaySummary(input.userId, today, today),
+    profile: input.profile,
+    allowance: input.allowance,
   };
 }
 

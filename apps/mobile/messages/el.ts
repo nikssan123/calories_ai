@@ -277,7 +277,7 @@ export const el: Messages = {
   'ob.birthTitle': 'Πότε γεννήθηκες;',
   'ob.birthBody': 'Η ηλικία είναι το τελευταίο που χρειάζεται ο υπολογισμός της καύσης.',
   'ob.birthAge': (count: number) => n(count, { one: 'έτους', other: 'ετών' }),
-  'ob.birthTooYoung': 'Η εφαρμογή είναι για άτομα 13 ετών και πάνω.',
+  'ob.birthTooYoung': 'Η εφαρμογή είναι για άτομα 16 ετών και πάνω.',
   'ob.birthImplausible': 'Έλεγξε τη χρονιά — η ημερομηνία δεν φαίνεται σωστή.',
 
   'ob.bodyTitle': 'Ύψος και βάρος',

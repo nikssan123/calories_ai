@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { AdminUser } from '@ct/shared';
+import { MIN_AGE, type AdminUser } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
 import { InsetGroup } from '@/components/InsetGroup';
@@ -185,7 +185,7 @@ export function UsersPanel() {
           return (
             <tr key={user.id} className={cn(disabled && 'opacity-60', busy === user.id && 'opacity-50')}>
               <Cell>
-                <span className="font-medium">{user.email}</span>
+                <span className="font-medium">{user.email ?? 'Guest'}</span>
                 {isSelf && <span className="text-muted-foreground ml-2 text-[12px]">(you)</span>}
                 <span className="text-muted-foreground block text-[12px]">
                   {user.display_name ?? '—'} · {user.timezone} · joined {timestamp(user.created_at).slice(0, 10)}
@@ -344,7 +344,7 @@ function AccountCard({
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 flex-1 truncate text-body font-medium">
-          {user.email}
+          {user.email ?? 'Guest'}
           {isSelf && <span className="text-muted-foreground ml-2 text-[12px]">(you)</span>}
         </span>
         <Status user={user} />
@@ -383,6 +383,14 @@ function AccountCard({
 
 /** Onboarded, in setup, or suspended — worded the same in both layouts. */
 function Status({ user }: { user: AdminUser }) {
+  // First, because it outranks everything else here: the journal has stopped
+  // answering them, and the account is waiting for somebody to decide on it.
+  if (user.stated_age !== null) {
+    return <span className="text-[var(--fat)]">Under 16 — said {user.stated_age}</span>;
+  }
+  if (user.age !== null && user.age < MIN_AGE) {
+    return <span className="text-[var(--fat)]">Under 16 — profile says {user.age}</span>;
+  }
   if (user.disabled_at !== null) return <span className="text-[var(--fat)]">Suspended</span>;
   if (user.is_setup_complete) return <span className="text-[var(--positive)]">Onboarded</span>;
   return <span className="text-muted-foreground">In setup</span>;

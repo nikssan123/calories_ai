@@ -283,7 +283,7 @@ export const ro: Messages = {
   'ob.birthTitle': 'Când te-ai născut?',
   'ob.birthBody': 'Vârsta e ultimul lucru de care are nevoie calculul.',
   'ob.birthAge': (count: number) => n(count, { one: 'an', few: 'ani', other: 'de ani' }),
-  'ob.birthTooYoung': 'Aplicația e pentru vârste de la 13 ani în sus.',
+  'ob.birthTooYoung': 'Aplicația e pentru vârste de la 16 ani în sus.',
   'ob.birthImplausible': 'Verifică anul — data pare greșită.',
 
   'ob.bodyTitle': 'Înălțimea și greutatea ta',

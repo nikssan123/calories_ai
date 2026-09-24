@@ -307,7 +307,7 @@ export const en = {
   'ob.birthTitle': 'When were you born?',
   'ob.birthBody': 'Age is the last thing the burn calculation needs.',
   'ob.birthAge': (count: number) => n(count, { one: 'year old', other: 'years old' }),
-  'ob.birthTooYoung': 'This app is for 13 and over.',
+  'ob.birthTooYoung': 'This app is for 16 and over.',
   'ob.birthImplausible': 'Check the year — that date looks off.',
 
   'ob.bodyTitle': 'Your height and weight',

@@ -1,5 +1,6 @@
 import { unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { ageFrom } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { env } from '../env.ts';
 import { authDescription } from '../ai/client.ts';
@@ -762,12 +763,14 @@ export interface AdminUser {
   last_entry_at: string | null;
   ai_turns: number;
   ai_cost_usd: number;
+  stated_age: number | null;
+  age: number | null;
 }
 
 export async function listUsers(limit = 100): Promise<AdminUser[]> {
   const rows = await query<any>(
     `SELECT u.id, u.email, u.display_name, u.timezone, u.locale, u.is_setup_complete,
-            u.disabled_at, u.created_at,
+            u.disabled_at, u.created_at, u.stated_age, u.birth_date,
             (SELECT max(last_seen_at) FROM auth_sessions s WHERE s.user_id = u.id) AS last_seen_at,
             (SELECT count(*) FROM food_entries f WHERE f.user_id = u.id)::int      AS food_entries,
             (SELECT count(*) FROM chat_messages m WHERE m.user_id = u.id)::int     AS chat_messages,
@@ -775,7 +778,9 @@ export async function listUsers(limit = 100): Promise<AdminUser[]> {
             (SELECT count(*) FROM ai_usage a WHERE a.user_id = u.id)::int          AS ai_turns,
             (SELECT COALESCE(sum(cost_usd), 0) FROM ai_usage a WHERE a.user_id = u.id)::float8 AS ai_cost_usd
        FROM users u
-      WHERE u.email IS NOT NULL
+      -- Guests are left out, except one who told the journal they are a child:
+      -- that account is the one most in need of somebody looking at it.
+      WHERE u.email IS NOT NULL OR u.stated_age IS NOT NULL
    ORDER BY u.created_at ASC
       LIMIT $1`,
     [limit],
@@ -786,7 +791,7 @@ export async function listUsers(limit = 100): Promise<AdminUser[]> {
 export async function getAdminUser(userId: string): Promise<AdminUser | null> {
   const rows = await query<any>(
     `SELECT u.id, u.email, u.display_name, u.timezone, u.locale, u.is_setup_complete,
-            u.disabled_at, u.created_at,
+            u.disabled_at, u.created_at, u.stated_age, u.birth_date,
             (SELECT max(last_seen_at) FROM auth_sessions s WHERE s.user_id = u.id) AS last_seen_at,
             (SELECT count(*) FROM food_entries f WHERE f.user_id = u.id)::int      AS food_entries,
             (SELECT count(*) FROM chat_messages m WHERE m.user_id = u.id)::int     AS chat_messages,
@@ -816,6 +821,8 @@ function toAdminUser(row: any): AdminUser {
     last_entry_at: row.last_entry_at ? new Date(row.last_entry_at).toISOString() : null,
     ai_turns: row.ai_turns,
     ai_cost_usd: Math.round(row.ai_cost_usd * 1e6) / 1e6,
+    stated_age: row.stated_age ?? null,
+    age: ageFrom(row.birth_date ? String(row.birth_date).slice(0, 10) : null),
   };
 }
 

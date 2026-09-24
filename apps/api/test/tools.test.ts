@@ -9,7 +9,7 @@ import { addDays } from '../src/time.ts';
 import { getUser } from '../src/services/user.ts';
 import { listNotes } from '../src/services/notes.ts';
 import { journalChanged } from '../src/services/usage.ts';
-import { query } from '../src/db.ts';
+import { query, queryOne } from '../src/db.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -1123,6 +1123,22 @@ describe('set_profile', () => {
       activity_level: null, goal: null, display_name: null, timezone: null, day_start_hour: null,
     });
     expect((await targetsForDate(user.id, TODAY)).kcal).toBe(1900);
+  });
+
+  it('records an age under 16 as said, and leaves the birth date alone', async () => {
+    const before = (await getUser(user.id)).birth_date;
+    const nineYearsAgo = `${new Date().getUTCFullYear() - 9}-01-01`;
+
+    const { json } = await call('set_profile', {
+      sex: null, birth_date: nineYearsAgo, height_cm: null, target_weight_kg: null,
+      activity_level: null, goal: null, display_name: null, timezone: null, day_start_hour: null,
+    });
+
+    expect(json).toMatchObject({ saved: [], under_age: true });
+    expect((await getUser(user.id)).birth_date).toBe(before);
+    const row = await queryOne<{ stated_age: number }>('SELECT stated_age FROM users WHERE id = $1', [user.id]);
+    expect(row?.stated_age).toBeGreaterThanOrEqual(8);
+    expect(row?.stated_age).toBeLessThanOrEqual(9);
   });
 });
 

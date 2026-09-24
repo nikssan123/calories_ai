@@ -22,11 +22,13 @@ import {
   LOCALE_ENGLISH_NAMES,
   MUSCLE_GROUPS,
   UNIT_SYSTEMS,
+  ageFrom,
   bodyWeightUnit,
   formatMass,
   meterLocked,
   meterRemaining,
   toBodyWeight,
+  underMinAge,
 } from '@ct/shared';
 import { query } from '../db.ts';
 import { unmeteredFor } from './lane.ts';
@@ -47,6 +49,7 @@ import {
   logWeight,
   updateFoodEntry,
 } from '../services/log.ts';
+import { recordStatedAge } from '../services/age.ts';
 import { buildDaySummary, buildProgress } from '../services/summary.ts';
 import { getUser, markOnboarded, missingProfileFields, updateUser } from '../services/user.ts';
 import { addNote, forgetNote, MAX_NOTE_LENGTH } from '../services/notes.ts';
@@ -1286,7 +1289,13 @@ const workoutExercisesField = z
     'Change something the app knows about the user: sex, date of birth, height, activity level, goal, target weight, which units they read, which language they read, what they will not eat. These are collected by a form when the account is created, so you are almost always correcting one — "actually I am 178", "switch me to pounds", "call me Nik" — rather than learning it for the first time. Call it the moment they say so; targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field.',
     {
       sex: z.enum(['male', 'female']).nullable().default(null),
-      birth_date: z.string().nullable().default(null).describe('YYYY-MM-DD. If they give only an age, convert it to an approximate birth date.'),
+      birth_date: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe(
+          'YYYY-MM-DD. If they give only an age, convert it to an approximate birth date. Send it even when they say they are under 16 — especially then: the app records the age instead and stops coaching them.',
+        ),
       height_cm: z.number().nullable().default(null).describe('Height in centimetres, always — convert from feet and inches yourself. 5\'10" is 178.'),
       target_weight_kg: z.number().nullable().default(null).describe('Goal weight in kilograms, always — convert from pounds or stones yourself. 165 lb is 74.8.'),
       units: z
@@ -1347,6 +1356,18 @@ const workoutExercisesField = z
       const patch = Object.fromEntries(
         Object.entries(args).filter(([, value]) => value !== null),
       );
+      /*
+       * A child telling the journal their age. Recorded as what they said, not
+       * written over the birth date the form was given — see migration 069 —
+       * and from the next turn on the journal stops calling the model at all.
+       */
+      if (typeof patch.birth_date === 'string' && underMinAge(patch.birth_date)) {
+        await recordStatedAge(tc.userId, ageFrom(patch.birth_date) ?? 0);
+        delete patch.birth_date;
+        if (Object.keys(patch).length === 0) {
+          return ok({ saved: [], under_age: true });
+        }
+      }
       // Read before the write: `retargetFromProfile` needs to know which of the
       // five actually moved, and afterwards there is nothing left to compare to.
       const before = await getUser(tc.userId);

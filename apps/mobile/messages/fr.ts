@@ -179,7 +179,7 @@ export const fr: Messages = {
   'ob.birthTitle': 'Tu es né quand ?',
   'ob.birthBody': 'L’âge est la dernière chose dont le calcul a besoin.',
   'ob.birthAge': (count) => n(count, { one: 'an', other: 'ans' }),
-  'ob.birthTooYoung': 'Cette app est réservée aux 13 ans et plus.',
+  'ob.birthTooYoung': 'Cette app est réservée aux 16 ans et plus.',
   'ob.birthImplausible': 'Vérifie l’année — cette date paraît fausse.',
 
   'ob.bodyTitle': 'Ta taille et ton poids',

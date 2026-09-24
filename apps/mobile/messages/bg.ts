@@ -169,7 +169,7 @@ export const bg: Messages = {
   'ob.birthTitle': 'Кога си роден?',
   'ob.birthBody': 'Възрастта е последното, което сметката иска.',
   'ob.birthAge': (count) => n(count, { one: 'година', other: 'години' }),
-  'ob.birthTooYoung': 'Приложението е за 13 години и нагоре.',
+  'ob.birthTooYoung': 'Приложението е за 16 години и нагоре.',
   'ob.birthImplausible': 'Провери годината — датата изглежда сгрешена.',
 
   'ob.bodyTitle': 'Ръст и тегло',

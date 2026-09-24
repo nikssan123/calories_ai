@@ -53,7 +53,7 @@ import { CoachSettings } from '@/components/CoachSettings';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { loadDay, localToday } from '@/lib/day';
-import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
+import { BIRTH_DATE_FLOOR, birthDateCeiling } from '@/lib/birth-date';
 import { useOnboarding } from '@/lib/onboarding';
 import { useEntitlements } from '@/lib/entitlements';
 import { billingAvailable, manageSubscription, restore, useStoreSubscription } from '@/lib/billing';
@@ -813,7 +813,7 @@ function BirthDate({
       mode="date"
       display="spinner"
       minimumDate={BIRTH_DATE_FLOOR}
-      maximumDate={new Date()}
+      maximumDate={birthDateCeiling()}
       onChange={(event, date) => {
         if (event.type === 'dismissed' || !date) return;
         // Local parts rather than toISOString: the picker hands back local

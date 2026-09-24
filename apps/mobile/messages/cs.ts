@@ -289,7 +289,7 @@ export const cs: Messages = {
   'ob.birthTitle': 'Tvoje datum narození',
   'ob.birthBody': 'Věk je poslední údaj, který výpočet potřebuje.',
   'ob.birthAge': (count: number) => n(count, { one: 'rok', few: 'roky', many: 'roku', other: 'let' }),
-  'ob.birthTooYoung': 'Aplikace je určená pro lidi od 13 let.',
+  'ob.birthTooYoung': 'Aplikace je určená pro lidi od 16 let.',
   'ob.birthImplausible': 'Zkontroluj rok – tohle datum nevypadá správně.',
 
   'ob.bodyTitle': 'Tvoje výška a váha',

@@ -13,6 +13,7 @@ import {
   cmToFeetInches,
   feetInchesToCm,
   formatWeightDelta,
+  MIN_AGE,
   predictTdee,
   toBodyWeight,
 } from '@ct/shared';
@@ -145,7 +146,7 @@ const TYPICAL: Record<Sex, { heightCm: number; weightKg: number }> = {
   female: { heightCm: 165, weightKg: 65 },
   male: { heightCm: 178, weightKg: 76 },
 };
-const AGE = { min: 13, max: 100 };
+const AGE = { min: MIN_AGE, max: 100 };
 
 /** What the goal weight is allowed to be, either side of where they are. */
 const GOAL_SPAN = 0.4;

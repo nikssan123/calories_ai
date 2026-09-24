@@ -279,7 +279,7 @@ export const hr: Messages = {
   'ob.birthTitle': 'Tvoj datum rođenja',
   'ob.birthBody': 'Dob je posljednje što izračun potrošnje treba.',
   'ob.birthAge': (count: number) => n(count, { one: 'godina', few: 'godine', other: 'godina' }),
-  'ob.birthTooYoung': 'Aplikacija je za osobe od 13 godina naviše.',
+  'ob.birthTooYoung': 'Aplikacija je za osobe od 16 godina naviše.',
   'ob.birthImplausible': 'Provjeri godinu — datum ne izgleda točno.',
 
   'ob.bodyTitle': 'Visina i težina',

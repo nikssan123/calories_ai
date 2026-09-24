@@ -171,7 +171,7 @@ export const de: Messages = {
   'ob.birthTitle': 'Wann bist du geboren?',
   'ob.birthBody': 'Das Alter ist das Letzte, was die Rechnung braucht.',
   'ob.birthAge': (count) => n(count, { one: 'Jahr alt', other: 'Jahre alt' }),
-  'ob.birthTooYoung': 'Diese App ist ab 13.',
+  'ob.birthTooYoung': 'Diese App ist ab 16.',
   'ob.birthImplausible': 'Prüf das Jahr — das Datum sieht falsch aus.',
 
   'ob.bodyTitle': 'Deine Größe und dein Gewicht',

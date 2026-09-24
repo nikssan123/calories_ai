@@ -282,7 +282,7 @@ export const sk: Messages = {
   'ob.birthTitle': 'Tvoj dátum narodenia',
   'ob.birthBody': 'Vek je posledné, čo výpočet potrebuje.',
   'ob.birthAge': (count: number) => n(count, { one: 'rok', few: 'roky', many: 'roka', other: 'rokov' }),
-  'ob.birthTooYoung': 'Aplikácia je pre ľudí od 13 rokov.',
+  'ob.birthTooYoung': 'Aplikácia je pre ľudí od 16 rokov.',
   'ob.birthImplausible': 'Skontroluj rok – ten dátum nevyzerá správne.',
 
   'ob.bodyTitle': 'Tvoja výška a váha',

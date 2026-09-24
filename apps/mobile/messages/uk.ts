@@ -274,7 +274,7 @@ export const uk: Messages = {
   'ob.birthTitle': 'Коли твій день народження?',
   'ob.birthBody': 'Вік — останнє, що потрібно для розрахунку витрат.',
   'ob.birthAge': (count: number) => n(count, { one: 'рік', few: 'роки', many: 'років', other: 'року' }),
-  'ob.birthTooYoung': 'Застосунок — для тих, кому вже є 13.',
+  'ob.birthTooYoung': 'Застосунок — для тих, кому вже є 16.',
   'ob.birthImplausible': 'Перевір рік — дата виглядає дивно.',
 
   'ob.bodyTitle': 'Твій зріст і вага',
