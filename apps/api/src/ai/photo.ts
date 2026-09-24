@@ -1,7 +1,7 @@
 import type { Allowance, ChatResponse, Locale } from '@ct/shared';
 import { insertMessage, recentUserTexts } from '../services/chat.ts';
 import { buildDaySummary } from '../services/summary.ts';
-import { recordUsage, spend, spendsGrant } from '../services/usage.ts';
+import { journalChanged, recordUsage, spend, spendsGrant } from '../services/usage.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { localDateFor } from '../time.ts';
 import { LANGUAGE_LOOKBACK, replyLanguage, speakingLocale } from './language.ts';
@@ -127,7 +127,7 @@ export async function logPhotoOnly(
    * log, and charging a scan for it takes a guest's only one for a photograph
    * of a cat. `spendsGrant` decides both.
    */
-  const changed = actions.length > 0;
+  const changed = journalChanged(actions);
   const metered = await spendsGrant(id, {
     changed,
     failed: Boolean(outcome.error),

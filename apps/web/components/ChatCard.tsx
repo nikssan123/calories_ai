@@ -149,6 +149,8 @@ function CardBody({
       return <PlanCard card={card} />;
     case 'review':
       return <ReviewCard card={card} prose={text} />;
+    case 'allowance':
+      return <AllowanceCard card={card} />;
     case 'workout_prompt':
       // Needs a real message id to answer onto. An optimistic bubble has none
       // yet, but it also cannot be carrying a card the model drew.
@@ -300,6 +302,25 @@ const MEAL_LABEL: Record<string, StringKey> = {
   dinner: 'meal.dinner',
   snack: 'meal.snackOne',
 };
+
+/**
+ * The plan card, as far as the web goes.
+ *
+ * The phone draws the counts and a door to the paywall; the web has neither —
+ * plans are bought in the stores, and there is no screen here to send anyone
+ * to. So the kitchen's refusal is drawn as the Cook tab already words it, and
+ * a question about the counts is left to the reply above, which was written
+ * from the same numbers.
+ */
+function AllowanceCard({ card }: { card: Extract<Card, { type: 'allowance' }> }) {
+  const t = useT();
+  if (card.topic !== 'kitchen') return null;
+  return (
+    <Shell>
+      <p className="text-muted-foreground text-footnote font-semibold">{t('cook.planLocked')}</p>
+    </Shell>
+  );
+}
 
 function Shell({ children, className }: { children: React.ReactNode; className?: string }) {
   return (

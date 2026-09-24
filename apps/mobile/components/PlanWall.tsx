@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
-import { TRIAL, type Allowance, type MeterName } from '@ct/shared';
+import { TRIAL, type Allowance, type MeterName, type PlanName } from '@ct/shared';
 import { meterLocked, meterRemaining } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Character } from '@/components/cast/Character';
@@ -13,6 +13,7 @@ import { useSaveAccount } from '@/lib/save-account';
 import { useAuth } from '@/lib/auth';
 import {
   introDuration,
+  meterNoun,
   remainingLine,
   TIER_NAMES,
   tierFor,
@@ -245,6 +246,173 @@ export function PlanWall({
         )}
       </Chunk>
     </Land>
+  );
+}
+
+/**
+ * The plan, drawn in the conversation because somebody asked about it.
+ *
+ * The model's card rather than the wall's: nothing was refused, a question was
+ * answered — "how many messages have I got left?", or a menu asked for on a
+ * tier with no kitchen. So it reuses the wall's surface and doors but none of
+ * its headline, which is written for the moment a grant runs out. Here the
+ * headline is the answer: the plan they are on, or the feature that is not on
+ * it, with the counts underneath as bars.
+ *
+ * The counts are the card's, not the live ones. It is a reply, and a reply
+ * scrolled back to next week says what was true when it was written — the
+ * sentence above it does, so the card has to agree with it.
+ *
+ * The doors follow the wall's rules exactly, because they are the same offer:
+ * a guest is asked to save the account (and shown the intro price, when the
+ * store has one), everyone else is shown the tier that answers what they asked,
+ * and the top tier is shown nothing to buy at all.
+ */
+export function AllowanceCard({
+  topic,
+  plan: cardPlan,
+  meters,
+}: {
+  topic: 'kitchen' | 'usage';
+  plan: PlanName;
+  meters: Allowance[];
+}) {
+  const colors = useColors();
+  const type = useType();
+  const tr = useT();
+  const locale = useLocale();
+  const router = useRouter();
+  const { plan, tiers } = useEntitlements();
+  const save = useSaveAccount();
+  const auth = useAuth();
+  const introDoor = useIntroWayIn();
+  const introWay = introDoor?.intro[0];
+
+  // Read off the session as well as the card, as the wall does: once the
+  // account is saved, a card from its guest days must stop offering it.
+  const guest = meters.some((m) => m.trial === 'guest') && auth.guest;
+  const next = tierFor(topic === 'kitchen' ? 'recipe' : 'chat', tiers, plan);
+
+  const title =
+    topic === 'kitchen'
+      ? tr('wall.notOnPlan')(capitalised(meterNoun('recipe', 2, tr), locale))
+      : guest
+        ? wallTitle(meters[0] ?? GUEST_CHAT, tr, locale, true)
+        : tr('plans.onPlan')(TIER_NAMES[cardPlan]);
+  const body = guest ? tr('wall.guestBody') : topic === 'kitchen' ? tr('wall.bodyRecipe') : undefined;
+
+  return (
+    <Land>
+      <Chunk
+        color={colors.calories}
+        depth={5}
+        contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
+      >
+        <View style={styles.top}>
+          <Character name="ember" mood="hopeful" size={56} loop={false} />
+          <View style={styles.words}>
+            <Text style={[t.eyebrow, styles.eyebrow, { color: colors.caloriesText }]}>
+              {`${tr('plans.yourPlan')} · ${TIER_NAMES[cardPlan]}`}
+            </Text>
+            <Serif accessibilityRole="header" style={[type.serifTitle, { color: colors.foreground }]}>
+              {title}
+            </Serif>
+            {body && <Text style={[t.footnote, { color: colors.mutedForeground }]}>{body}</Text>}
+          </View>
+        </View>
+
+        {topic === 'usage' && (
+          <View style={styles.meters}>
+            {meters.map((allowance) => (
+              <MeterLine key={allowance.meter} allowance={allowance} colors={colors} />
+            ))}
+          </View>
+        )}
+
+        {(guest || next) && (
+          <View style={styles.actions}>
+            {guest ? (
+              <Door solid label={tr('guest.saveDoor')} colors={colors} onPress={() => save.open('guest_limit')} />
+            ) : (
+              next && (
+                <Door
+                  solid
+                  colors={colors}
+                  label={tr('plans.seeWhatAdds')(TIER_NAMES[next])}
+                  onPress={() => router.push({ pathname: '/upgrade', params: { plan: next } })}
+                />
+              )
+            )}
+          </View>
+        )}
+        {guest && introDoor && introWay && (
+          <View style={styles.introRow}>
+            <Door
+              colors={colors}
+              label={tr('guest.tryDoor')(introWay.price, introDuration(introWay, locale))}
+              onPress={() => router.push({ pathname: '/upgrade', params: { plan: introDoor.plan } })}
+            />
+          </View>
+        )}
+      </Chunk>
+    </Land>
+  );
+}
+
+/** A guest's chat meter, for the one title that needs a meter and got none. */
+const GUEST_CHAT: Allowance = {
+  meter: 'chat',
+  allowed: null,
+  used: 0,
+  period: 'ever',
+  resets_at: null,
+  unlimited: false,
+  credits: 0,
+  trial: 'guest',
+  trial_ends_at: null,
+};
+
+function capitalised(word: string, locale: string): string {
+  return word.charAt(0).toLocaleUpperCase(locale) + word.slice(1);
+}
+
+/** One meter as a bar and the count it leaves, or the word for having none. */
+function MeterLine({ allowance, colors }: { allowance: Allowance; colors: Palette }) {
+  const tr = useT();
+  const locale = useLocale();
+  const noun = capitalised(meterNoun(allowance.meter, 2, tr), locale);
+  let label: string;
+  let spent: number | null = null;
+  if (allowance.unlimited) {
+    label = `${noun} · ${tr('plans.unlimited')}`;
+  } else if (meterLocked(allowance)) {
+    label = tr('wall.notOnPlan')(noun);
+  } else {
+    // Bought stock counts: it is theirs to spend, and the question was how
+    // much they can still send, not how much of the grant is left.
+    const left = meterRemaining(allowance) + allowance.credits;
+    label = remainingLine(allowance, left, tr);
+    const allowed = allowance.allowed ?? 0;
+    spent = allowed > 0 ? Math.min(1, allowance.used / allowed) : null;
+  }
+  return (
+    <View style={styles.meterRow}>
+      {spent !== null && (
+        <View style={[styles.track, { backgroundColor: withAlpha(colors.calories, 0.16) }]}>
+          <View
+            style={[
+              styles.fill,
+              {
+                width: `${Math.round((1 - spent) * 100)}%`,
+                backgroundColor: colors.primary,
+                experimental_backgroundImage: colors.primaryRamp,
+              },
+            ]}
+          />
+        </View>
+      )}
+      <Text style={[t.footnoteSemibold, styles.eyebrow, { color: colors.foreground }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -597,6 +765,7 @@ const styles = StyleSheet.create({
   eyebrow: { flexShrink: 1 },
   fill: { height: '100%', borderRadius: 999 },
   introRow: { marginTop: 2 },
+  meters: { gap: 6 },
   // A label in a row container does not wrap on its own — it overflows and is
   // clipped, which is how "€1.99 for 1 week" lost its last word. `flexShrink`
   // hands it back the width it is allowed to wrap inside; the pill's

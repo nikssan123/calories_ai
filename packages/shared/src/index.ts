@@ -2845,6 +2845,30 @@ export const ChatCard = z.discriminatedUnion('type', [
       .object({ from_kcal: z.number(), to_kcal: z.number(), explanation: z.string() })
       .nullable(),
   }),
+  /**
+   * The plan, drawn where somebody asked about it — with the door beside it.
+   *
+   * Requested by the model via `show_allowance` for two kinds of turn. One is
+   * a question about the plan itself: "how many messages do I have left?",
+   * "how many photos can I send?", "what does Coach get me?". The other is a
+   * request the plan does not cover, which today means the kitchen on free and
+   * plus — "give me a menu for tomorrow" used to be answered with a sentence
+   * saying cooking is part of Coach and no way to act on it.
+   *
+   * The allowances are the server's, read at the moment of the turn, for the
+   * same reason as every other card's numbers: the model answering "you have
+   * two left" from memory is how a count goes wrong. They are a snapshot, like
+   * a food card's day bar — a card scrolled back to a week later says what was
+   * true when it was asked, which is what the reply above it also says.
+   */
+  z.object({
+    type: z.literal('allowance'),
+    /** `kitchen` is a locked feature being asked for; `usage` is a question about the plan. */
+    topic: z.enum(['kitchen', 'usage']),
+    plan: PlanName,
+    /** Chat and photo, in that order — the two meters every tier carries. */
+    meters: z.array(Allowance),
+  }),
 ]);
 export type ChatCard = z.infer<typeof ChatCard>;
 
@@ -2872,6 +2896,14 @@ export const ChatAction = z.object({
     'plan_made',
     'plan_shown',
     'review_written',
+    /*
+     * The plan card. Its own kind rather than `card_shown` because it is the
+     * one action that must not count as the turn having done something: see
+     * `journalChanged` on the API, which decides whether a turn spends the
+     * grant, and a question about the grant answered with a card that spent it
+     * would be the least defensible unit this app ever charged.
+     */
+    'allowance_shown',
   ]),
   entry_id: z.string().uuid().nullable(),
   summary: z.string(),

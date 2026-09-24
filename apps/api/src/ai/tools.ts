@@ -24,6 +24,8 @@ import {
   UNIT_SYSTEMS,
   bodyWeightUnit,
   formatMass,
+  meterLocked,
+  meterRemaining,
   toBodyWeight,
 } from '@ct/shared';
 import { query } from '../db.ts';
@@ -75,6 +77,8 @@ import {
   updateExtra,
 } from '../services/shopping.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
+import { allowanceFor, journalChanged, spend, spendsGrant } from '../services/usage.ts';
+import { hasKitchen } from '../services/plans.ts';
 import {
   cookLibraryRecipe,
   getLibraryRecipe,
@@ -1480,6 +1484,72 @@ const workoutExercisesField = z
     { annotations: { readOnlyHint: true }, alwaysLoad: true },
   );
 
+  /**
+   * The plan, as a card with a door on it.
+   *
+   * Two kinds of turn want it, and neither had anything to show before. A
+   * question about the plan — "how many messages have I got left?" — was
+   * answered from nothing, because the model has never been told the count. A
+   * request the plan does not cover — a menu for tomorrow, on a tier with no
+   * kitchen — was answered with a sentence naming Coach and no way to act on
+   * it: on 2026-09-24 a guest asked for a menu three times in four minutes and
+   * the only thing that ever reached them was the word.
+   *
+   * The numbers are read here, not given to the model to recite, and the card
+   * carries the same numbers the reply is written from. The chat meter is taken
+   * *after* this turn: `spendsGrant` says whether the turn now running costs a
+   * unit, and a card saying "3 left" under a reply that just spent the third is
+   * the count going wrong in front of the person who asked for it.
+   *
+   * Never itself a reason to spend — see `journalChanged`.
+   */
+  const showAllowance = tool(
+    'show_allowance',
+    'Show their plan as a card: messages and photos left, and the way to more. Call it (1) when they ask about the plan itself — how many messages or photos they have left, what their plan includes, what an upgrade would add, why something is limited — with topic "usage"; and (2) when they ask for something their plan does not include — recipes, a menu, a meal plan, a week of dinners on an account without the kitchen — with topic "kitchen". The card carries the numbers and the button; your reply is one sentence around it. Never state a count you did not read from this tool.',
+    {
+      topic: z
+        .enum(['kitchen', 'usage'])
+        .describe('"kitchen" for a locked cooking request, "usage" for a question about the plan.'),
+    },
+    async (args) => {
+      const profile = await getUser(tc.userId);
+      const unmetered = unmeteredFor(profile.email);
+      const [chat, photo] = await Promise.all([
+        allowanceFor(tc.userId, profile.plan, 'chat', unmetered),
+        allowanceFor(tc.userId, profile.plan, 'photo', unmetered),
+      ]);
+      const spends = await spendsGrant(tc.userId, {
+        changed: journalChanged(tc.actions),
+        failed: false,
+        unlimited: chat.unlimited,
+      });
+      const chatAfter = spend(chat, spends && !meterLocked(chat));
+      const left = (allowance: typeof chat) =>
+        allowance.unlimited ? 'unlimited' : meterRemaining(allowance) + allowance.credits;
+
+      tc.actions.push({
+        kind: 'allowance_shown',
+        entry_id: null,
+        summary: `${profile.plan} — ${left(chatAfter)} messages, ${left(photo)} photos left`,
+        card: {
+          type: 'allowance',
+          topic: args.topic,
+          plan: profile.plan,
+          meters: [chatAfter, photo],
+        },
+      });
+      return ok({
+        plan: profile.plan,
+        guest: chat.trial === 'guest',
+        messages_left: left(chatAfter),
+        photos_left: left(photo),
+        kitchen: hasKitchen(profile.plan, unmetered),
+        note: 'The card shows these numbers and the upgrade button. Say it in one sentence; do not pitch.',
+      });
+    },
+    { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
   /*
    * The kitchen gets its own tools and none of these.
    *
@@ -2714,7 +2784,7 @@ const workoutExercisesField = z
     getShoppingList,
     lookupBarcodeTool,
   ];
-  const shows = [showChart, showDay];
+  const shows = [showChart, showDay, showAllowance];
   const writes = [
     logFood,
     updateFood,

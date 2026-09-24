@@ -24,6 +24,7 @@ import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDist
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { FoodEditor } from '@/components/FoodEditor';
+import { AllowanceCard } from '@/components/PlanWall';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { scale, Servings } from '@/components/kitchen/Servings';
 import { Sparkline } from '@/components/Sparkline';
@@ -221,6 +222,8 @@ function CardBody({
       return <RecipesCard card={card} onLogged={onLogged} />;
     case 'review':
       return <ReviewCard card={card} prose={text} />;
+    case 'allowance':
+      return <AllowanceCard topic={card.topic} plan={card.plan} meters={card.meters} />;
     case 'workout_prompt':
       // Needs a real message id to answer onto. An optimistic bubble has none
       // yet, but it also cannot be carrying a card the model drew.

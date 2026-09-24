@@ -15,7 +15,7 @@ import { listNotes } from '../services/notes.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { latestReview } from '../services/reviews.ts';
 import { getUser } from '../services/user.ts';
-import { recordUsage, spend, spendsGrant } from '../services/usage.ts';
+import { journalChanged, recordUsage, spend, spendsGrant } from '../services/usage.ts';
 import { hasKitchen } from '../services/plans.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
@@ -398,7 +398,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    * it does not leave this function intact — `shown` below drops the
    * retractions, and a log-then-delete is still a turn that worked.
    */
-  const changed = actions.length > 0;
+  const changed = journalChanged(actions);
   const metered = await spendsGrant(input.userId, {
     changed,
     failed: Boolean(outcome.error),

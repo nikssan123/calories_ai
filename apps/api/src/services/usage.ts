@@ -14,6 +14,7 @@ import {
   planLimitCode,
   trialTerms,
   type Allowance,
+  type ChatAction,
   type MeterName,
   type PlanLimitCode,
   type PlanName,
@@ -596,6 +597,19 @@ export async function requireAllowance(
  * recorded metered with no journal fact on it, so it can neither spend the
  * budget nor earn it — a spell of failures leaves both counts where they were.
  */
+/**
+ * Whether a turn's actions changed anything — the `changed` `spendsGrant` reads.
+ *
+ * Every action but one is something the turn did to the journal or drew from
+ * it. The exception is the plan card: a turn whose only act was answering "how
+ * many messages have I got left?" is exactly the turn the free budget exists
+ * for, and counting its card as work would charge a unit for the question
+ * about units — and, the other way round, earn a free turn for asking it.
+ */
+export function journalChanged(actions: readonly ChatAction[]): boolean {
+  return actions.some((action) => action.kind !== 'allowance_shown');
+}
+
 export async function spendsGrant(
   userId: string,
   { changed, failed, unlimited }: { changed: boolean; failed: boolean; unlimited: boolean },

@@ -8,6 +8,8 @@ import { targetsForDate } from '../src/services/targets.ts';
 import { addDays } from '../src/time.ts';
 import { getUser } from '../src/services/user.ts';
 import { listNotes } from '../src/services/notes.ts';
+import { journalChanged } from '../src/services/usage.ts';
+import { query } from '../src/db.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -1221,6 +1223,63 @@ describe('the display tools', () => {
     });
   });
 
+  describe('show_allowance', () => {
+    it('draws the plan from the meters, and tells the model the same counts', async () => {
+      const { plan } = await getUser(user.id);
+      const { json } = await call('show_allowance', { topic: 'usage' });
+
+      expect(actions[0]!.kind).toBe('allowance_shown');
+      const card = actions[0]!.card as Extract<ChatCard, { type: 'allowance' }>;
+      expect(card).toMatchObject({ type: 'allowance', topic: 'usage', plan });
+      expect(card.meters.map((m) => m.meter)).toEqual(['chat', 'photo']);
+
+      const [chat, photo] = card.meters;
+      const left = (m: typeof chat) => m!.allowed! - m!.used + m!.credits;
+      expect(json).toMatchObject({
+        plan,
+        messages_left: left(chat),
+        photos_left: left(photo),
+        kitchen: plan === 'coach',
+      });
+    });
+
+    it('counts this turn when this turn is the one that spends', async () => {
+      // The two free turns of the day are gone and nothing was logged to earn
+      // a third, so the turn asking the question is itself a unit.
+      for (let i = 0; i < 2; i++) {
+        await query(
+          `INSERT INTO ai_usage (user_id, provider, kind, model, metered, changed_journal)
+           VALUES ($1, 'anthropic', 'text_log', 'test', false, false)`,
+          [user.id],
+        );
+      }
+      await call('show_allowance', { topic: 'usage' });
+      const [chat] = (actions[0]!.card as Extract<ChatCard, { type: 'allowance' }>).meters;
+
+      actions.length = 0;
+      await query(`DELETE FROM ai_usage WHERE user_id = $1`, [user.id]);
+      await call('show_allowance', { topic: 'usage' });
+      const [fresh] = (actions[0]!.card as Extract<ChatCard, { type: 'allowance' }>).meters;
+
+      expect(chat!.used).toBe(fresh!.used + 1);
+    });
+
+    it('carries the topic, so a locked kitchen draws as one', async () => {
+      await call('show_allowance', { topic: 'kitchen' });
+      expect(actions[0]!.card).toMatchObject({ type: 'allowance', topic: 'kitchen' });
+    });
+
+    it('is not a change to the journal, so it neither spends nor earns', () => {
+      expect(journalChanged([{ kind: 'allowance_shown', entry_id: null, summary: '', card: null }])).toBe(false);
+      expect(
+        journalChanged([
+          { kind: 'allowance_shown', entry_id: null, summary: '', card: null },
+          { kind: 'food_logged', entry_id: null, summary: '', card: null },
+        ]),
+      ).toBe(true);
+    });
+  });
+
   describe('show_day', () => {
     it('draws the day from the log, defaulting to today', async () => {
       await addMeal(user, { date: realToday, kcal: 1450, protein_g: 96 });
@@ -1294,6 +1353,7 @@ describe('cards on the logging tools', () => {
     build({}, true);
     expect([...tools.keys()]).not.toContain('show_chart');
     expect([...tools.keys()]).not.toContain('show_day');
+    expect([...tools.keys()]).not.toContain('show_allowance');
   });
 });
 
