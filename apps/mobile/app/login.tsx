@@ -167,9 +167,19 @@ export default function LoginScreen() {
       // The token arrives in this response and nowhere else, so it is stored
       // before anything else can fire a request without it.
       await adoptSession(status);
-      // The server's word for it rather than `signup`, so the two paths into
-      // this screen count the same thing. See `created` on `AuthStatus`.
-      if (status.created) reachedStep('account');
+      /*
+       * The server's word for it rather than `signup`, so the two paths into
+       * this screen count the same thing. See `created` on `AuthStatus`.
+       *
+       * The other half is the point of `signed_in`: an exchange that found an
+       * account already there. Without it `existing` — the tap on "I already
+       * have an account" — has no denominator, and 42 of those taps against 14
+       * accounts that have ever had an email say most of them cannot be
+       * arriving anywhere. One of the two fires on every success, so the two
+       * added together are also the honest count of installs that left this
+       * screen with a session.
+       */
+      reachedStep(status.created ? 'account' : 'signed_in');
       // …and the status is re-read, because signup answers before the profile
       // the rest of the app renders from exists.
       await refresh();
@@ -218,7 +228,7 @@ export default function LoginScreen() {
       // gets no message at all.
       if (!status) return;
       await adoptSession(status);
-      if (status.created) reachedStep('account');
+      reachedStep(status.created ? 'account' : 'signed_in');
       await refresh();
       if (await mergeKeptGuest()) await refresh();
     } catch (e) {

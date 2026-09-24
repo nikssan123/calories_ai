@@ -191,6 +191,17 @@ export type MeterName = z.infer<typeof MeterName>;
  * the first session rather than past the end of it.
  */
 export const GUEST = { chat: 3, photo: 1 } as const;
+/**
+ * `days` is **days the journal was written in**, not days on the calendar.
+ *
+ * It was elapsed time until 2026-09-24, and the funnel is what changed it: of
+ * the thirty accounts the first twelve days of advertising brought in, four
+ * came back for a second day and none for a third, so a three-day window that
+ * runs whether or not anybody is there had never once been reached by the
+ * person it belonged to. `freeStage` in the API's `plans.ts` has the full
+ * argument and the reason it costs nothing — the bill is bounded by `chat` and
+ * `photo`, which are spent per turn and not per day.
+ */
 export const TRIAL = { days: 3, chat: 9, photo: 1 } as const;
 
 /**
@@ -432,7 +443,16 @@ export const Allowance = z.object({
    * one-off grant with no reset — true of each.
    */
   trial: TrialStage.nullable().default(null),
-  /** When the trial runs out. Set on `trial` and `ended`, null on `guest`. */
+  /**
+   * When the trial runs out — and, since the trial started counting days used
+   * rather than days elapsed (`freeStage` in the API's `plans.ts`), always
+   * null.
+   *
+   * Kept rather than removed, because it is the one field an older client reads
+   * to say "ends Thursday" and a date invented to fill it would be a deadline
+   * nothing enforces. Null is what those clients already handle: they drop the
+   * clause and say how much is left instead.
+   */
   trial_ends_at: z.string().nullable().default(null),
 });
 export type Allowance = z.infer<typeof Allowance>;
@@ -4049,6 +4069,25 @@ export type AdminOverview = z.infer<typeof AdminOverview>;
  * went uncounted, which is why this step read zero for the whole of its first
  * four days while accounts were being created. A new install that leaves with
  * an account reached the end of the walk whichever door it went through.
+ *
+ * `reminder_on` and `signed_in` are the two rungs this list could not answer a
+ * question about, added 2026-09-24 with the changes they measure.
+ *
+ * `reminder_on` is the daily reminder actually taking — offered on the plan
+ * screen now rather than only after a first meal. It is the cheapest thing in
+ * the app that brings anybody back and it was, until this step, completely
+ * invisible from here: the reminder is an OS alarm on the phone, set without an
+ * account and without a request, so nothing about it has ever reached a server.
+ * A lever with no gauge on it cannot be tuned, and in the twelve days after the
+ * ads started four of thirty accounts came back for a second day.
+ *
+ * `signed_in` is a sign-in that worked, and exists to give `existing` a
+ * denominator. Over those same twelve days `existing` counted 42 taps on "I
+ * already have an account" against fourteen accounts that have ever had an
+ * email address on them, eleven of those being test and review logins. Whether
+ * that link is a door or a dead end is the single cheapest thing on this list
+ * to find out, and until now the funnel could only count people going through
+ * it, never coming out.
  */
 export const FUNNEL_STEPS = [
   'welcome',
@@ -4062,6 +4101,7 @@ export const FUNNEL_STEPS = [
   'target',
   'activity',
   'plan',
+  'reminder_on',
   'save',
   'guest',
   'in_app',
@@ -4070,6 +4110,7 @@ export const FUNNEL_STEPS = [
   'signup_google',
   'account',
   'existing',
+  'signed_in',
 ] as const;
 export const FunnelStep = z.enum(FUNNEL_STEPS);
 export type FunnelStep = z.infer<typeof FunnelStep>;

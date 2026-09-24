@@ -313,6 +313,17 @@ export async function remindersStanding(): Promise<RemindersStanding> {
  * true here always stands for a decision somebody made rather than for
  * something the app did on their behalf at launch.
  */
+/**
+ * A reminder time as a face, for the two screens that show one.
+ *
+ * Deliberately 24-hour and not localised. It is a value being set rather than a
+ * moment being reported — the picker beside it is the phone's own and speaks
+ * whatever the phone speaks — and an "8:00 PM" here against a 20:00 there would
+ * read as two different settings.
+ */
+export const clock = (hour: number, minute: number): string =>
+  `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
 export async function remindersTouched(): Promise<boolean> {
   try {
     return (await AsyncStorage.getItem(STORAGE_KEY)) !== null;

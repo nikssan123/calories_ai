@@ -9,7 +9,7 @@ import { useToast } from '@/components/Toast';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/lib/i18n';
 import { claimCue, STREAK_DAYS, type ReminderCue } from '@/lib/reminder-invite';
-import { applyReminders, DEFAULT_REMINDERS, loadReminders } from '@/lib/reminders';
+import { applyReminders, clock, DEFAULT_REMINDERS, loadReminders } from '@/lib/reminders';
 import { registerForPush } from '@/lib/push';
 import { type as t, useColors } from '@/theme';
 
@@ -236,9 +236,6 @@ export function ReminderInvite({
     </Sheet>
   );
 }
-
-const clock = (hour: number, minute: number): string =>
-  `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 20, paddingTop: 4, gap: 16 },

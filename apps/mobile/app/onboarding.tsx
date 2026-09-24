@@ -25,6 +25,7 @@ import { Serif } from '@/components/Serif';
 import { Advance, Rail, Step } from '@/components/onboarding/Chrome';
 import { Measure, Segmented, Stepper } from '@/components/onboarding/Inputs';
 import { OptionCard } from '@/components/onboarding/OptionCard';
+import { PlanReminder, type PlanReminderChoice } from '@/components/onboarding/PlanReminder';
 import { Building, Plan, projectionFor } from '@/components/onboarding/Reveal';
 import { Stage } from '@/components/onboarding/Stage';
 import { DayTease, JournalTease } from '@/components/onboarding/Tease';
@@ -34,6 +35,8 @@ import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { reachedStep } from '@/lib/funnel';
 import { useOnboarding } from '@/lib/onboarding';
+import { registerForPush } from '@/lib/push';
+import { applyReminders, loadReminders } from '@/lib/reminders';
 import { column, type as t, useColors, useType } from '@/theme';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -558,6 +561,56 @@ export default function OnboardingScreen() {
     }
   }, [guest, weightKg, sex, birthDate, heightCm, goal, activity, units, targetWeight, targetSkipped, locale, profile?.locale, adoptProfile, saveDraft, dropDraft]);
 
+  /*
+   * The daily reminder, answered on the plan screen and put into force by the
+   * button that leaves it. `PlanReminder` has the argument for asking here at
+   * all; this is the half of it that has to happen on the way out.
+   *
+   * Held in a ref rather than state because nothing renders from it: a switch
+   * that re-rendered the plan on every flip would restart the count-up on the
+   * target behind it.
+   */
+  const reminder = useRef<PlanReminderChoice | null>(null);
+  const chooseReminder = useCallback((choice: PlanReminderChoice | null) => {
+    reminder.current = choice;
+  }, []);
+
+  /**
+   * Sets the reminder, if it was left on, before the walk ends.
+   *
+   * Awaited rather than fired off, and that is the whole shape of it: this is
+   * where the OS permission dialog goes up, and it has to be answered while the
+   * plan is still on screen — a dialog that arrives one frame into the tabs
+   * belongs to no question the reader remembers being asked.
+   *
+   * Nothing here can stop the walk. A refusal at the dialog comes back as
+   * `enabled: false` and is simply not counted; a throw is swallowed, because a
+   * reminder that could not be scheduled is not a reason to strand somebody on
+   * the last screen of setup with a plan they cannot get to.
+   */
+  const commitReminder = useCallback(async () => {
+    const choice = reminder.current;
+    if (!choice?.on) return;
+    try {
+      const stored = await loadReminders();
+      const applied = await applyReminders(
+        { ...stored, log: { enabled: true, hour: choice.hour, minute: choice.minute } },
+        { requestPermissions: true },
+      );
+      if (!applied.log.enabled) return;
+      /*
+       * The same session, not the next launch — `ReminderInvite` has the full
+       * reason. Somebody who says yes here and never opens the app again is
+       * exactly who the server's one message is for, and the token that carries
+       * it would otherwise be minted on a launch that never happens.
+       */
+      void registerForPush();
+      reachedStep('reminder_on');
+    } catch {
+      // Scheduling failed. The walk is worth more than the reminder.
+    }
+  }, []);
+
   /**
    * "Start logging", for somebody with no session. Marking the draft finished is
    * the whole action: the provider makes a guest session for it, uploads the
@@ -566,8 +619,9 @@ export default function OnboardingScreen() {
   const savePlan = useCallback(async () => {
     if (!draft) return;
     reachedStep('save');
+    await commitReminder();
     await saveDraft({ ...draft, completed_at: new Date().toISOString() });
-  }, [draft, saveDraft]);
+  }, [draft, saveDraft, commitReminder]);
 
   /*
    * Fired by arriving at the building screen rather than by the button that
@@ -584,6 +638,7 @@ export default function OnboardingScreen() {
   }, [phase, submit]);
 
   const finish = useCallback(async () => {
+    await commitReminder();
     /*
      * The gate reads the server's answer, not ours. Refreshing here is what
      * flips `needsSetup` false and lets `app/_layout.tsx` swap this screen for
@@ -592,7 +647,7 @@ export default function OnboardingScreen() {
      * the wrong screen.
      */
     await refreshOnboarding();
-  }, [refreshOnboarding]);
+  }, [refreshOnboarding, commitReminder]);
 
   const projection =
     targets && goal !== 'maintain' && !targetSkipped
@@ -649,6 +704,7 @@ export default function OnboardingScreen() {
         <Plan
           targets={targets}
           projection={projection}
+          aside={<PlanReminder onChange={chooseReminder} />}
           footer={
             /*
              * Straight into the app (GUEST-ACCOUNTS.md). This used to be "Save my
@@ -1015,6 +1071,25 @@ function Welcome({
         </View>
 
         <GlowButton label={tr('ob.welcomeStart')} onPress={onStart} />
+        {/*
+          * The way back for somebody who already has an account — and, until
+          * 2026-09-24, a way *out* for a great many people who do not.
+          *
+          * It was set in the same size and weight as body text, in full
+          * foreground, directly under the only other thing on the screen, and
+          * 42 installs in twelve days tapped it. Fourteen accounts have ever
+          * had an email address on them and eleven of those are test and review
+          * logins, so almost none of those taps can have been somebody coming
+          * back: they are people who read a screen with a button and a link and
+          * concluded the app wants an account, which is the one thing the guest
+          * walk exists to tell them it does not.
+          *
+          * So it is quiet now — footnote, muted, under the fold of the primary
+          * button — and still a full tap target, because the person it is
+          * actually for is reinstalling and must be able to find it. `signed_in`
+          * in `FUNNEL_STEPS` is the other half of this change: whether the
+          * remaining taps arrive anywhere is now a number rather than a guess.
+          */}
         {guest && (
           <Pressable
             onPress={onSignIn}
@@ -1022,7 +1097,7 @@ function Welcome({
             hitSlop={10}
             style={({ pressed }) => [styles.haveAccount, { opacity: pressed ? 0.5 : 1 }]}
           >
-            <Text style={[t.bodySemibold, { color: colors.foreground }]}>{tr('ob.haveAccount')}</Text>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('ob.haveAccount')}</Text>
           </Pressable>
         )}
       </View>

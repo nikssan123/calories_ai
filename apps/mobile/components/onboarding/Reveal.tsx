@@ -266,10 +266,13 @@ export interface Projection {
 export function Plan({
   targets,
   projection,
+  aside,
   footer,
 }: {
   targets: Targets;
   projection: Projection | null;
+  /** Anything that belongs with the button but is not it — see `PlanReminder`. */
+  aside?: React.ReactNode;
   footer: React.ReactNode;
 }) {
   const colors = useColors();
@@ -364,6 +367,7 @@ export function Plan({
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <View style={column}>
+          {aside}
           <Trio
             size={40}
             moods={cheering ? ['cheer', 'cheer', 'cheer'] : ['idle', 'wave', 'idle']}
