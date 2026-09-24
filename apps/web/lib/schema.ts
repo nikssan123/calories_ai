@@ -1,5 +1,6 @@
 import type { PublicLibraryRecipe } from '@ct/shared';
-import { ORIGIN, SOCIAL_PROFILES } from '@/lib/seo';
+import { ORIGIN } from '@/lib/seo';
+import { SOCIAL_PROFILES } from '@/lib/social';
 
 /**
  * Schema.org JSON-LD, built from data the app already holds.

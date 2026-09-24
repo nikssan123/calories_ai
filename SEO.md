@@ -1,30 +1,268 @@
 # SEO audit — daysofar.com
 
-> **Re-audited 2026-09-20.** The 2026-09-12 audit below (scored 24/100) is kept as
-> an appendix. Every Critical item it raised is fixed. This document leads with the
-> new audit; skip to [Appendix](#appendix--the-2026-09-12-audit-superseded) for the
-> old one.
+> **Re-audited 2026-09-24**, the day the internal-link work shipped. The
+> 2026-09-20 audit's sections are kept below and remain the reference for
+> anything this pass did not re-measure; the 2026-09-12 audit is the
+> [Appendix](#appendix--the-2026-09-12-audit-superseded).
 
 Next.js 15.5.23 App Router, `output: 'standalone'`, self-hosted behind Caddy at
-204.168.249.73 (Hetzner, Helsinki). 223 URLs in the sitemap, all 200, no redirects.
+204.168.249.73 (Hetzner, Helsinki). **275 URLs** in the sitemap (143 blog posts in
+13 languages, 99 recipes, 13 blog indexes, 20 document and landing pages).
 
-**SEO Health Score: 61 / 100** (was 24).
+**SEO Health Score: 65 / 100** (was 61, was 24).
 
-| Category | Weight | Then | Now |
-|---|---|---|---|
-| Technical SEO | 22% | 20 | **66** |
-| Content quality | 23% | 34 | **61** |
-| On-page SEO | 20% | 15 | **60** |
-| Schema / structured data | 10% | 0 | **62** |
-| Performance (CWV) | 10% | 55 | **68** |
-| AI search readiness | 10% | 10 | **55** |
-| Images | 5% | 45 | **42** |
+| Category | Weight | 09-12 | 09-20 | 09-24 |
+|---|---|---|---|---|
+| Technical SEO | 22% | 20 | 66 | **74** |
+| Content quality | 23% | 34 | 61 | **48** |
+| On-page SEO | 20% | 15 | 60 | **68** |
+| Schema / structured data | 10% | 0 | 62 | **78** |
+| Performance (CWV) | 10% | 55 | 68 | **72** |
+| AI search readiness | 10% | 10 | 55 | **61** |
+| Images | 5% | 45 | 42 | **50** |
 
-The site is no longer absent. It renders, it is crawlable, it has 223 real pages,
-eight structured-data types and a genuinely good blog. What holds it at 61 is one
-technical defect that hides the `<head>` of 191 pages from the main Googlebot
-crawler and every AI crawler, one structured-data policy violation replicated 99
-times, and the fact that nothing links to it from anywhere on the internet.
+**Content quality fell 13 points and that is not a regression — it is a stricter
+read of a bigger corpus.** 91 posts became 143, the publishing rate held at a
+topic a day in thirteen languages, and this pass judged that corpus against
+scaled-content abuse rather than against readability. Nothing in the blog got
+worse; the exposure grew and the assessment caught up with it.
+
+Three points read the same way as last time and one is new. Still true: nothing
+on the internet links here. Now fixed: the `<head>` blackout on 250-odd leaf
+pages, the 99-page recipe policy violation, and the orphaned blog. Newly the
+sharpest item: **two index pages — `/blog` and `/cook/library` — still serve their
+`<title>` after `</head>` to real Googlebot and to every AI crawler**, and they
+are the front doors to everything the fix repaired.
+
+---
+
+## 0. Re-audit — 2026-09-24
+
+Six specialists plus direct measurement. No Search Console, CrUX, Moz or
+DataForSEO keys are configured, so everything below is server-response and
+database evidence; nothing here is field data.
+
+### What the day's work actually moved
+
+| | before | after |
+|---|---|---|
+| Blog posts linking to another post | **0 of 143** | **104 of 143** |
+| In-body post-to-post links | 0 | **180** |
+| Posts with no in-body inbound link | 143 | 42 — all covered by the ring's three |
+| `sameAs` edges | 1 (Play) | 5 (Play + Instagram, TikTok, X, YouTube) |
+| Posts with a visible byline | 0 | 143 |
+| Posts stating fat as ~7,000 kcal/kg | 24 | 0 outright; 15 keep a "7,000–7,700" range |
+
+### 0.1 Critical — `/blog` and `/cook/library` still stream their metadata
+
+Measured twice independently, with `Googlebot/2.1`, `GPTBot/1.2` and desktop
+Chrome giving byte-identical results:
+
+| Page | `</head>` at | `<title>` at | in head? |
+|---|---:|---:|---|
+| `/blog/weekends-ruin-calorie-deficit` | 8,446 | 2,954 | **yes** |
+| `/blog/where-calorie-numbers-come-from` | 8,513 | 2,954 | **yes** |
+| `/cook/library/2-step-chicken` | 6,975 | 3,184 | **yes** |
+| `/de/blog` | 7,606 | 2,956 | **yes** |
+| **`/blog`** | 3,850 | **18,365** | **no** |
+| **`/cook/library`** | 3,858 | **79,355** | **no** |
+
+The `[slug]` routes are fixed for every user agent, and the fix does not depend
+on Next's bot allowlist — they are prerendered, so there is no streaming decision
+to get wrong. The two index routes have no dynamic segment, so the
+`generateStaticParams() => []` trick cannot apply, and they still carry
+`force-dynamic`.
+
+**There is a one-line fix, and it is verified present in the installed Next.**
+`htmlLimitedBots` is a real top-level config key in 15.5.23
+(`config-schema.js:526`, `htmlLimitedBots: z.instanceof(RegExp).optional()`),
+consumed as `new RegExp(htmlLimitedBots || HTML_LIMITED_BOT_UA_RE_STRING, 'i')`
+in `server/lib/streaming-metadata.js:25`. It **replaces** the default rather than
+extending it, so the value must restate the default list and add the agents that
+matter:
+
+```
+[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|
+yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|
+Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|
+LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight
+```
+
+plus `Googlebot|GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-Web|
+anthropic-ai|PerplexityBot|CCBot`. Note what the default omits: `Bingbot` is
+there and plain **`Googlebot` is not** — `Google-[\w-]+` matches
+`Google-InspectionTool`, which is why URL Inspection has always shown these two
+pages as perfect while the crawler that indexes them saw a bare head.
+
+This also inoculates any future `force-dynamic` page, which route surgery would
+not.
+
+### 0.2 High — one fact, two numbers, *inside the same article*
+
+The 2026-09-20 audit's §8 found the fat constant stated two ways across 44 pages.
+Twenty-four posts were corrected on 09-24 and twelve were deliberately left
+stating a "7,000–7,700" range, on the argument that a range containing the right
+number contradicts nothing.
+
+**That argument was wrong at the level that matters.** The split is not between
+topics, it is *within* them — the same article in different languages:
+
+| Topic | locales saying 7,700 only | locales still saying 7,000 |
+|---|---:|---:|
+| Overnight and day-to-day scale swings | 8 | **5** |
+| Faithful logging, no weight change | 7 | 3 |
+| Logging on the days you would rather not | 4 | 3 |
+| A disciplined week and a loose weekend | 10 | 2 |
+| Formula-based maintenance numbers | 11 | 2 |
+
+A reader who opens the German and then the Bulgarian version of one article gets
+different physics. Collapsing the fifteen remaining ranges to the house value is
+the same markup-safe digit edit the other twenty-four had.
+
+### 0.3 High — nothing is accountable for any article
+
+`Article.author` is the Organization on all 143 posts, and the byline shipped on
+09-24 says "Day So Far" linked to `/about`. That is honest — a named human byline
+on a model-written article would be a lie — but it does not answer *who is
+accountable for this claim*, on a health-adjacent topic, and the content
+specialist's verdict on the question was a flat no.
+
+The three specialists disagreed here, which is worth recording: schema says
+Organization is the correct and policy-safe choice, search-experience says point
+`author` at the existing Person node, content says neither is enough. **They are
+all right about different things, and the resolution is not a schema edit.**
+Pointing `author` at Nikolay Lyutov would make the markup claim he wrote 143
+articles he did not write. The honest options are to introduce a real review step
+and credit it ("written with AI, reviewed by —"), or to disclose the process
+plainly. Both are product decisions, not tags.
+
+### 0.4 High — the blog cites nothing, while the static pages cite well
+
+`/accuracy` and `/how-it-works` link Nutrition5k, Open Food Facts and USDA
+FoodData Central. Across the sampled posts the only outbound link in the body is
+the Play Store install link, and named formulas — "Mifflin-St Jeor",
+"Harris-Benedict" — are not attributed at all. The generator now *requires*
+naming a source in the sentence, so this closes for new posts; the 143 already
+written do not have it.
+
+Worse in the specific: **`/blog/how-accurate-calorie-counting-needs-to-be` never
+links `/accuracy` and never cites the 66% MAPE figure.** The site's one genuinely
+rare asset is absent from the post whose subject it is.
+
+### 0.5 Medium — `sameAs` claims what 19 pages do not show
+
+`lib/schema.ts` opens with the rule that structured data may only claim what the
+page also shows. The four profile links added on 09-24 render in `PublicShell`'s
+footer — which is the blog and the recipe library. The root layout emits
+`Organization.sameAs` on **every** page, so the 13 landing pages and the 6
+document pages assert four URLs they never link. Fix: render `SOCIAL_PROFILES` in
+`Landing.tsx`'s footer and `LegalPage`'s, matching `PublicShell`.
+
+### 0.6 Medium — the homepage still has the wedge phrase only in its title
+
+`<title>` is "Day So Far — the calorie counter you just talk to". The H1 is "Just
+say what you ate.", none of the 12 H2s contain "talk", "voice" or "AI", and the
+closest H3 is "Type it or say it". The SERP for *calorie tracker you talk to* is
+small product landing pages — the page type is already right, so this is a
+one-heading edit, not a rebuild.
+
+### 0.7 Medium — LCP is Poor on every page, and the cause is an animation
+
+Lighthouse 13.5.0, mobile config, 4x CPU throttling, one run per URL. **Lab only
+— no CrUX or PageSpeed key is configured, so none of this is field data.**
+
+| Page | Lighthouse | LCP | CLS | TBT |
+|---|---:|---:|---:|---:|
+| `/` | 77 | **5.6 s** | 0 | 110 ms |
+| `/blog` | 83 | **4.6 s** | 0 | 60 ms |
+| `/blog/weekends-ruin-calorie-deficit` | 82 | **4.9 s** | 0 | 80 ms |
+| `/cook/library/2-step-chicken` | 81 | **5.2 s** | 0 | 60 ms |
+
+CLS and TBT are already good everywhere. **LCP alone is why nothing passes**, and
+the LCP subpart breakdown says it is not the server: TTFB is 218–239 ms on all
+four, and 1,086–1,092 ms of *element render delay* is the whole problem.
+
+On the homepage the cause is confirmed in code: `Landing.tsx` is a client
+component and the hero lede — the measured LCP node — is wrapped in `Reveal`,
+which server-renders `opacity-0 translate-y-2` and only becomes visible after
+hydration, an `IntersectionObserver` firing, and a 700 ms transition
+(`globals.css:236`). **The site animates its own largest contentful paint out of
+the way.** Rendering above-the-fold content at full opacity, and keeping `Reveal`
+for sections below it, is the single biggest lever available.
+
+`/blog` and the slug page show the same ~1.09 s render delay *without* `Reveal`,
+and `AuthGate` was ruled out (those routes are in `isPrerenderableRoute`). That
+cause is unidentified and wants a main-thread trace rather than a guess.
+
+Two more, measured rather than assumed:
+
+- **Brotli and zstd are still off.** `curl` with `Accept-Encoding: br, gzip,
+  zstd` came back `content-encoding: gzip`. The one-line `encode zstd br gzip` in
+  the Caddyfile is still unapplied, and Lighthouse already flags ~350 ms of
+  render-blocking CSS that it would shrink.
+- **The homepage ships 467 KB gzip across 25 scripts**, one chunk 194 KB, all of
+  which must parse before that `IntersectionObserver` can fire. A server-component
+  shell with client islands is the structural version of fix one.
+
+Caching, honestly: the cached slug route answered in 223 ms against 239 ms for
+uncacheable `/blog` — inside single-request jitter on an idle box. The caching
+work was right for crawl behaviour and for `lastmod`, but **no measurement here
+shows it buying latency**, and the real difference would only appear under
+concurrent load, which was not tested.
+
+### 0.8 What improved, with the evidence
+
+- **The blog is no longer a set of orphans.** 180 in-body links across 104 posts,
+  plus a three-post ring on every page. 42 posts have no in-body inbound link and
+  none is isolated.
+- **Schema rose to 78.** `aggregateRating` confirmed absent from all 99 recipes
+  and from `SoftwareApplication`; `@id` references resolve; `/about` carries
+  `mainEntity` → the Person node.
+- **AI readiness rose to 61.** `robots.txt` allows every AI crawler on purpose,
+  `llms.txt` covers the blog, all 13 locale indexes, `/accuracy`, `/how-it-works`
+  and `/about`, and it carries an explicit Disambiguation section for the
+  brand-name collision. The leaf pages now serve their head correctly to GPTBot,
+  ClaudeBot, PerplexityBot and CCBot.
+- **Images to 50**, on `og:image` everywhere rather than on any new asset. There
+  are no `<img>` elements on the landing, blog or `/accuracy` pages at all —
+  inline SVG only — and one, with alt text, per recipe page.
+
+### 0.9 Not measured this pass
+
+- **Real-user Core Web Vitals.** §0.7 is one Lighthouse sample per URL at ±10–15%
+  LCP noise, mobile only, and no page was run twice. `/de` and `/cook/library`
+  were not run at all, and INP cannot be measured in a lab — TBT stands in for it.
+- **Whether Google has indexed any of this.** Still the largest blind spot, still
+  one API key away (§ action item 31).
+- **Backlinks.** Assumed effectively zero on the strength of the brand search;
+  Common Crawl cannot answer it at this tier and no Moz or Bing key is set.
+- `x-robots-tag` on the private routes, the other ten `/{locale}/blog` indexes,
+  the FAQPage and CollectionPage output, and the sitemap's lag beyond confirming
+  the mechanism.
+- The sitemap's publish lag **is** understood and is not a defect: the route is
+  `force-dynamic` with `fetchCache: 'default-cache'` and the upstream fetch
+  carries `revalidate: 3600`, so a new post appears within the hour. Observed
+  live: 13 posts published at 08:25 UTC were absent at 08:31 and present by 08:47,
+  at which point the sitemap read 275 URLs.
+
+### 0.10 Do these six, in this order
+
+1. **`htmlLimitedBots` in `next.config.ts`** — closes §0.1 for Googlebot and every
+   AI crawler, one line, covers future pages too.
+2. **Collapse the fifteen remaining "7,000–7,700" ranges** — §0.2, a digit edit,
+   and it is a truth problem rather than an optimisation.
+3. **Render `SOCIAL_PROFILES` in the other two footers** — §0.5, restores the
+   file's own invariant.
+4. **Link `/accuracy` from the accuracy post, and cite the 66% figure there** —
+   §0.4, the one asset nobody else in the category has.
+5. **Decide the authorship question** — §0.3. Not a tag: either a review step
+   exists and gets credited, or the process gets disclosed.
+6. **Stop animating the LCP element, and turn on `encode zstd br gzip`** — §0.7.
+   The first is a component change, the second is one line in a Caddyfile that
+   lives on the box rather than in this repo.
+
+Then, unchanged from 09-20 and still the ceiling on everything above: **set up
+Search Console**, and get the first external link.
 
 ---
 

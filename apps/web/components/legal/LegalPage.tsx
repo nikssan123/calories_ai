@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Logo } from '@/components/Logo';
+import { SOCIAL_PROFILES } from '@/lib/social';
 import { DocumentScroll } from '@/components/DocumentScroll';
 import { cn } from '@/lib/utils';
 
@@ -60,7 +61,7 @@ export function LegalPage({
         <div className="border-hairline mt-10 border-t pt-2">{children}</div>
 
         <footer className="border-hairline text-muted-foreground mt-16 flex flex-col gap-3 border-t pt-8 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <nav className="flex items-center gap-6">
+          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Link href="/support" className="hover:text-foreground transition-colors">
               Support
             </Link>
@@ -73,6 +74,18 @@ export function LegalPage({
             <a href="mailto:support@daysofar.com" className="hover:text-foreground transition-colors">
               Contact
             </a>
+            {/* See the note in lib/social.ts: the entity graph on this page
+                claims these four, so this page has to show them. */}
+            {SOCIAL_PROFILES.map((profile) => (
+              <a
+                key={profile.href}
+                href={profile.href}
+                rel="me noopener"
+                className="hover:text-foreground transition-colors"
+              >
+                {profile.name}
+              </a>
+            ))}
           </nav>
           <span>© {new Date().getFullYear()} Day So Far</span>
         </footer>

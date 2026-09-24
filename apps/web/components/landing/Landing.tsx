@@ -24,6 +24,7 @@ import {
 import { LOCALES_BY_NAME, LOCALE_NAMES, formatNumber, matchLocale, type DayQuality, type Locale } from '@ct/shared';
 import { DietQuality } from '@/components/DietQuality';
 import { Logo } from '@/components/Logo';
+import { SOCIAL_PROFILES } from '@/lib/social';
 import { CastTrio } from '@/components/Cast';
 import { HeroDemo } from '@/components/landing/HeroDemo';
 import { Reveal } from '@/components/landing/Reveal';
@@ -1124,6 +1125,19 @@ function Footer({ copy, locale }: { copy: LandingCopy['footer']; locale: Locale 
               <Link key={link.href} href={link.href} className="hover:text-foreground transition-colors">
                 {link.label}
               </Link>
+            ))}
+            {/* The brand's own accounts. `Organization.sameAs` claims these on
+                every page in the site, this one included, and the rule in
+                lib/schema.ts is that it may only claim what the page shows. */}
+            {SOCIAL_PROFILES.map((profile) => (
+              <a
+                key={profile.href}
+                href={profile.href}
+                rel="me noopener"
+                className="hover:text-foreground transition-colors"
+              >
+                {profile.name}
+              </a>
             ))}
             <span>© {new Date().getFullYear()} Day So Far</span>
           </nav>

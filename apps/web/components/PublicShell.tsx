@@ -4,7 +4,7 @@ import { Logo } from '@/components/Logo';
 import { DocumentScroll } from '@/components/DocumentScroll';
 import { STORE_HREF } from '@/components/landing/StoreLinks';
 import { blogIndexPath } from '@/lib/blog';
-import { SOCIAL_PROFILES } from '@/lib/seo';
+import { SOCIAL_PROFILES } from '@/lib/social';
 import { messagesFor } from '@/lib/i18n-server';
 
 /**
