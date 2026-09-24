@@ -119,6 +119,18 @@ A reader who opens the German and then the Bulgarian version of one article gets
 different physics. Collapsing the fifteen remaining ranges to the house value is
 the same markup-safe digit edit the other twenty-four had.
 
+> **Fixed 2026-09-24.** Fourteen of the fifteen collapsed to 7,700 (the
+> fifteenth, `/es/blog/volver-a-registrar-calorias`, says "unas 7.000 al mes" of
+> a monthly total and is not the constant). The Spanish overnight post also
+> dropped a "round it to 7,500" step and had its 9,700 recomputed to 9,900.
+>
+> **And the field nobody had checked: the meta description.** Both this audit's
+> §8 and the 09-20 one counted *pages* by their body text, so three posts kept
+> the wrong constant in `description` — served in `<meta name="description">`,
+> in `og:description` and in the JSON-LD, which is to say in the snippet a
+> searcher reads before deciding to click. `bg`, `cs` and `hr` are corrected. A
+> body-only grep is not a check on a field that has its own copy of the claim.
+
 ### 0.3 High — nothing is accountable for any article
 
 `Article.author` is the Organization on all 143 posts, and the byline shipped on
