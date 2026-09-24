@@ -208,7 +208,7 @@ function layerHtml(script: MemeScript): string {
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:${W}px;height:${H}px;background:transparent}
 body{position:relative;-webkit-font-smoothing:antialiased}
-.wrap{position:absolute;left:0;right:0;top:300px;padding:0 70px;text-align:center}
+.wrap{position:absolute;left:0;right:0;top:330px;padding:0 70px;text-align:center}
 /* A dark stroke under the glyph plus three shadows at rising blur. Survives a
    white sky and a black doorway without touching the footage. paint-order keeps
    the stroke behind the fill so the letterforms stay their real weight. */
@@ -223,7 +223,12 @@ body{position:relative;-webkit-font-smoothing:antialiased}
 .sub{margin-top:40px;font-family:'D',sans-serif;font-weight:800;font-size:56px;line-height:1.24;
   color:#fff;letter-spacing:-.01em;-webkit-text-stroke:2px rgba(0,0,0,.6);paint-order:stroke fill;
   text-shadow:0 2px 4px rgba(0,0,0,.95),0 6px 22px rgba(0,0,0,.85),0 12px 44px rgba(0,0,0,.6)}
-.mark{position:absolute;left:70px;bottom:120px;display:flex;align-items:center;gap:18px}
+/* The mark sits at the TOP.
+   The bottom of a 9:16 frame is where both platforms stack their own caption,
+   handle and action rail, so a mark down there is the one thing certain to be
+   covered. post.mts's slides have always marked at the top; this was the
+   outlier. */
+.mark{position:absolute;left:70px;top:70px;display:flex;align-items:center;gap:18px}
 .mark img{width:64px;height:64px;border-radius:16px}
 .mark span{font-family:'T',sans-serif;font-weight:700;font-size:38px;color:#fff;
   text-shadow:0 2px 10px rgba(0,0,0,.85)}
