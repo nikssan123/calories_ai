@@ -27,14 +27,21 @@ import { buildNutritionServer, type ToolContext } from './tools.ts';
  * with words under it never comes here.
  */
 
+/*
+ * The language rule is its own bullet, over both endings, because hanging it
+ * off the first one left the second in English: on 2026-09-24 a Bulgarian
+ * guest photographed a bottle of water, the brief said Bulgarian, and the
+ * reply was "This is just a bottle of water, no food to log here."
+ */
 const PHOTO_LANE_PROMPT = `# This turn
 
 You are reading one photograph of one meal, and nothing else. There is no conversation to continue and no question to answer.
 
 - Call \`log_food\` exactly once, with every distinct food you can see as its own item. Estimate portions from the plate, the cutlery and the packaging, as described above.
 - Leave \`when\` null: the photo was taken now.
-- Then reply with one short sentence naming what you logged, in the language named below. No questions, no advice, no numbers — the card carries the numbers.
-- If there is genuinely no food in the photograph, do not call the tool; say so in one sentence.`;
+- Then reply with one short sentence naming what you logged. No questions, no advice, no numbers — the card carries the numbers.
+- If there is genuinely no food in the photograph, do not call the tool; say so in one sentence.
+- Whichever sentence you write, write it in the language named below, if one is. That includes the names of the foods: they were not given to you in any language, so they take the reply's.`;
 
 export interface PhotoLaneInput {
   mediaType: string;
