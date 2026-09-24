@@ -43,6 +43,18 @@ import { type as t, useColors, useType, withAlpha } from '@/theme';
  * answer, always a whole number.
  */
 
+/**
+ * What the wheel opens on, and what the walk shows as picked before anybody has
+ * spun it. Exported because the iOS picker has to open on the same date: the
+ * two platforms draw different controls and must not disagree about what the
+ * control currently says.
+ *
+ * Not a median and not a guess at the reader — a round number in the middle of
+ * the plausible range, which is what every date picker on both platforms opens
+ * on and for the same reason: it is the shortest average distance to spin.
+ */
+export const DEFAULT_BIRTH_DATE = '1995-01-01';
+
 /** One row, and how many are on screen. Odd, so there is a middle. */
 const ROW = 40;
 const VISIBLE = 5;
@@ -75,32 +87,16 @@ export function DateWheel({
    * hundred and twenty spins away from anybody's birthday.
    */
   const initial = useMemo(() => {
-    if (value) {
-      const [y, m, d] = value.split('-').map(Number);
-      if (y && m && d) return { year: y, month: m - 1, day: d };
-    }
-    return { year: 1995, month: 0, day: 1 };
+    const [y, m, d] = (value ?? DEFAULT_BIRTH_DATE).split('-').map(Number);
+    if (y && m && d) return { year: y, month: m - 1, day: d };
+    const [fy, fm, fd] = DEFAULT_BIRTH_DATE.split('-').map(Number);
+    return { year: fy!, month: fm! - 1, day: fd! };
   }, [value]);
 
   const [year, setYear] = useState(initial.year);
   const [month, setMonth] = useState(initial.month);
   const [day, setDay] = useState(initial.day);
 
-  /*
-   * Whether a wheel has actually been moved.
-   *
-   * Without it this control answers its own question: it mounts showing a date,
-   * reports it, and Continue goes live on a birthday nobody chose — which is a
-   * worse trade here than on the height boxes two screens later, because age
-   * moves the burn calculation and 1 January 1995 is not a median, it is a
-   * placeholder. iOS's spinner behaves exactly this way (it shows a date and
-   * leaves `birthDate` null until it is touched), and the two platforms have to
-   * agree about when a question counts as answered.
-   *
-   * A date already on the draft counts as touched: it was answered on an
-   * earlier pass, and coming back through Back must not un-answer it.
-   */
-  const [touched, setTouched] = useState(value !== null);
 
   const years = useMemo(() => {
     const first = min.getFullYear();
@@ -131,9 +127,20 @@ export function DateWheel({
     if (day > daysInMonth) setDay(daysInMonth);
   }, [day, daysInMonth]);
 
-  /* Report only a date inside the bounds, only real ones, and only once asked. */
+  /*
+   * Report every date the wheel comes to rest on, and the one it opens on.
+   *
+   * It used to withhold the opening date until a wheel had been moved, so that
+   * Continue could not go live on a birthday nobody chose. That was the wrong
+   * trade and the screen said so: the wheel plainly shows a date, and a control
+   * that displays an answer while the app behaves as though it has none reads
+   * as broken — no age underneath, a dead button, and nothing saying why. It is
+   * also the opposite of what the height boxes two screens later now do.
+   *
+   * So the shown date is the picked date, here as everywhere else in the walk:
+   * the app proposes, the reader corrects, and correcting is one spin.
+   */
   useEffect(() => {
-    if (!touched) return;
     const picked = new Date(year, month, Math.min(day, daysInMonth));
     if (picked < min || picked > max) return;
     onChange(
@@ -141,7 +148,7 @@ export function DateWheel({
         picked.getDate(),
       ).padStart(2, '0')}`,
     );
-  }, [touched, year, month, day, daysInMonth, min, max, onChange]);
+  }, [year, month, day, daysInMonth, min, max, onChange]);
 
   /*
    * How this reader's language writes a date. `formatToParts` answers with the
@@ -164,24 +171,10 @@ export function DateWheel({
     }
   }, [locale]);
 
-  /** Every column reports through here, so this is the one place that learns it. */
-  const moved = useCallback(
-    (set: (index: number) => void) => (index: number) => {
-      setTouched(true);
-      set(index);
-    },
-    [],
-  );
-
   const columns: Record<Part, { values: string[]; index: number; set: (i: number) => void; flex: number }> = {
-    day: { values: days, index: Math.min(day, daysInMonth) - 1, set: moved((i) => setDay(i + 1)), flex: 2 },
-    month: { values: months, index: month, set: moved(setMonth), flex: 4 },
-    year: {
-      values: years.map(String),
-      index: years.indexOf(year),
-      set: moved((i) => setYear(years[i]!)),
-      flex: 3,
-    },
+    day: { values: days, index: Math.min(day, daysInMonth) - 1, set: (i) => setDay(i + 1), flex: 2 },
+    month: { values: months, index: month, set: setMonth, flex: 4 },
+    year: { values: years.map(String), index: years.indexOf(year), set: (i) => setYear(years[i]!), flex: 3 },
   };
 
   return (
@@ -263,6 +256,20 @@ function Column({
     ref.current?.scrollTo({ y: settled.current * ROW, animated: false });
   }, []);
 
+  /*
+   * The row under the band, reported the moment it changes — during the drag,
+   * not when it stops.
+   *
+   * This is what makes the age underneath count up and down as the year wheel
+   * turns, which is the whole feedback this control has: the number that
+   * matters is not on the wheel, it is the sentence below it, and a sentence
+   * that only catches up once the wheel has stopped makes spinning to an age
+   * a guess-and-check.
+   *
+   * Cheap in spite of the event rate, because it is guarded on the row rather
+   * than the pixel: at most one state change per row crossed, which is the same
+   * number of renders a settled-only wheel does by the end of the same spin.
+   */
   const rest = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const landed = Math.round(event.nativeEvent.contentOffset.y / ROW);
@@ -280,6 +287,10 @@ function Column({
       style={{ flex, height: ROW * VISIBLE }}
       contentContainerStyle={{ paddingVertical: PAD }}
       onContentSizeChange={place}
+      onScroll={rest}
+      /* Every frame, because `rest` is the thing that keeps the age in step
+         with the wheel; it does its own work only when the row changes. */
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
       /*
        * Without this the wheel cannot be spun at all, and it is the one prop
@@ -292,9 +303,9 @@ function Column({
       nestedScrollEnabled
       snapToInterval={ROW}
       decelerationRate="fast"
-      /* Both, because only one of them fires: a flick ends in momentum, a slow
-         drag released at rest ends in neither, and Android reports the two
-         differently from iOS. `settled` makes the duplicate harmless. */
+      /* And on the way to rest, because a snap can finish on a row no scroll
+         event reported. All three call the same guarded handler, so the
+         duplicates cost nothing. */
       onMomentumScrollEnd={rest}
       onScrollEndDrag={rest}
     >

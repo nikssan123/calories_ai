@@ -23,7 +23,7 @@ import { RingObject } from '@/components/RingObject';
 import { Serif } from '@/components/Serif';
 import { Advance, Rail, Step } from '@/components/onboarding/Chrome';
 import { Measure, Segmented, Stepper } from '@/components/onboarding/Inputs';
-import { DateWheel } from '@/components/onboarding/DateWheel';
+import { DateWheel, DEFAULT_BIRTH_DATE } from '@/components/onboarding/DateWheel';
 import { OptionCard } from '@/components/onboarding/OptionCard';
 import { MeasureAsk } from '@/components/onboarding/MeasureAsk';
 import { PlanReminder, type PlanReminderChoice } from '@/components/onboarding/PlanReminder';
@@ -409,6 +409,25 @@ export default function OnboardingScreen() {
    * two figures already in place is a review, not a question, and `selectText-
    * OnFocus` would put a whole height under the next digit typed.
    */
+  /*
+   * The birthday screen counts as picked the moment it is looked at.
+   *
+   * Both pickers open on a date and show it — the iOS spinner and `DateWheel`
+   * alike — and neither used to report it, so the walk stood in front of a
+   * control plainly reading "1 January 1995" with no age underneath it and a
+   * dead Continue. That is the app disagreeing with its own screen. The wheel
+   * now reports what it shows; this is the iOS half of the same fact, since a
+   * native picker only speaks when it is spun.
+   *
+   * Same bargain as the height boxes two screens later: the app proposes, the
+   * reader corrects, and correcting is one spin.
+   */
+  useEffect(() => {
+    if (phase !== 'questions' || teasing || step !== 'birth') return;
+    if (birthDate !== null) return;
+    setBirthDate(DEFAULT_BIRTH_DATE);
+  }, [phase, teasing, step, birthDate]);
+
   useEffect(() => {
     if (phase !== 'questions' || teasing || step !== 'body') return;
     if (seeded.current || bodyTyped) return;
@@ -937,7 +956,7 @@ export default function OnboardingScreen() {
               />
             ) : (
               <DateTimePicker
-                value={birthDate ? new Date(`${birthDate}T12:00:00Z`) : new Date(1995, 0, 1)}
+                value={new Date(`${birthDate ?? DEFAULT_BIRTH_DATE}T12:00:00Z`)}
                 mode="date"
                 display="spinner"
                 minimumDate={BIRTH_DATE_FLOOR}
