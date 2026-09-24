@@ -1400,4 +1400,15 @@ export const uk: Messages = {
   'workout.whatKind': 'Яке це було тренування?',
   'workout.lessNamed': (caption: string) => `Менше: ${caption}`,
   'workout.moreNamed': (caption: string) => `Більше: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Допоможеш побачити, яка реклама працює?',
+  'measure.shared': 'Лише яка реклама тебе привела',
+  'measure.private': 'Ніколи твою їжу чи вагу',
+  'measure.allow': 'Із радістю',
+  'measure.decline': 'Ні, дякую',
+  'measure.later': 'Змінити можна будь-коли у «Профілі».',
+  'setup.privacy': 'Приватність',
+  'setup.measureAds': 'Допоможи міряти рекламу',
+  'setup.measureAdsHint': 'Google бачить, яка реклама тебе привела. Ніколи — що ти їси чи скільки важиш.',
 };

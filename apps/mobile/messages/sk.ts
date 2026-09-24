@@ -1426,4 +1426,15 @@ export const sk: Messages = {
   'workout.whatKind': 'Aký druh tréningu?',
   'workout.lessNamed': (caption: string) => `Menej: ${caption}`,
   'workout.moreNamed': (caption: string) => `Viac: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Pomôžeš nám zistiť, ktorá reklama funguje?',
+  'measure.shared': 'Len ktorá reklama ťa priviedla',
+  'measure.private': 'Nikdy tvoje jedlá ani váhu',
+  'measure.allow': 'Pokojne',
+  'measure.decline': 'Nie, vďaka',
+  'measure.later': 'Kedykoľvek to zmeníš v „Profile“.',
+  'setup.privacy': 'Súkromie',
+  'setup.measureAds': 'Pomôž nám merať reklamy',
+  'setup.measureAdsHint': 'Google uvidí, ktorá reklama ťa priviedla. Nikdy, čo ješ alebo koľko vážiš.',
 };

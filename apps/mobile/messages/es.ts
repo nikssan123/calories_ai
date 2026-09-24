@@ -1251,4 +1251,15 @@ export const es: Messages = {
   'workout.whatKind': '¿Qué tipo de sesión?',
   'workout.lessNamed': (caption: string) => `Menos ${caption}`,
   'workout.moreNamed': (caption: string) => `Más ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': '¿Nos ayudas a ver qué anuncio funciona?',
+  'measure.shared': 'Solo qué anuncio te trajo aquí',
+  'measure.private': 'Nunca tus comidas ni tu peso',
+  'measure.allow': 'Claro, adelante',
+  'measure.decline': 'No, gracias',
+  'measure.later': 'Puedes cambiarlo en «Perfil».',
+  'setup.privacy': 'Privacidad',
+  'setup.measureAds': 'Ayúdanos a medir los anuncios',
+  'setup.measureAdsHint': 'Google ve qué anuncio te trajo aquí. Nunca lo que comes ni lo que pesas.',
 };

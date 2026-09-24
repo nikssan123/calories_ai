@@ -43,6 +43,7 @@ import { untilWords } from '@ct/shared/words';
 import { PressableChunk } from '@/components/Chunk';
 import { DietRules } from '@/components/DietRules';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { MeasureSettings } from '@/components/MeasureSettings';
 import { NumberField, Picker, Sheet, TextField, wellStyle } from '@/components/Field';
 import { Material } from '@/components/Material';
 import { Skeleton } from '@/components/Skeleton';
@@ -536,6 +537,8 @@ export default function SetupScreen() {
         <PlanSettings />
 
         <CoachSettings />
+
+        <MeasureSettings />
 
         {profile.guest ? (
           <GuestAccount

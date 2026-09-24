@@ -1415,4 +1415,15 @@ export const hr: Messages = {
   'workout.whatKind': 'Kakav trening?',
   'workout.lessNamed': (caption: string) => `Manje: ${caption}`,
   'workout.moreNamed': (caption: string) => `Više: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Pomažeš nam vidjeti koji oglas radi?',
+  'measure.shared': 'Samo koji te je oglas doveo',
+  'measure.private': 'Nikad tvoje obroke ni težinu',
+  'measure.allow': 'Rado',
+  'measure.decline': 'Ne, hvala',
+  'measure.later': 'Promijeni bilo kada u „Profilu”.',
+  'setup.privacy': 'Privatnost',
+  'setup.measureAds': 'Pomozi nam mjeriti oglase',
+  'setup.measureAdsHint': 'Google vidi koji te je oglas doveo. Nikad što jedeš ili koliko težiš.',
 };

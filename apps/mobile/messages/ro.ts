@@ -1401,4 +1401,15 @@ export const ro: Messages = {
   // A colon, because „mai puține/mai mulți” would have to agree with the caption.
   'workout.lessNamed': (caption: string) => `Mai puțin: ${caption}`,
   'workout.moreNamed': (caption: string) => `Mai mult: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Ne ajuți să vedem ce reclamă merge?',
+  'measure.shared': 'Doar ce reclamă te-a adus aici',
+  'measure.private': 'Niciodată mesele sau greutatea ta',
+  'measure.allow': 'Cu plăcere',
+  'measure.decline': 'Nu, mulțumesc',
+  'measure.later': 'Poți schimba oricând din „Profil”.',
+  'setup.privacy': 'Confidențialitate',
+  'setup.measureAds': 'Ajută-ne să măsurăm reclamele',
+  'setup.measureAdsHint': 'Google vede ce reclamă te-a adus aici. Niciodată ce mănânci sau cât cântărești.',
 };

@@ -1381,4 +1381,15 @@ export const el: Messages = {
   // Nouns, so nothing has to agree with the caption («βάρος», «επαναλήψεις»).
   'workout.lessNamed': (caption: string) => `Μείωση: ${caption}`,
   'workout.moreNamed': (caption: string) => `Αύξηση: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Μας βοηθάς να δούμε ποια διαφήμιση δουλεύει;',
+  'measure.shared': 'Μόνο ποια διαφήμιση σε έφερε',
+  'measure.private': 'Ποτέ τα γεύματα ή το βάρος σου',
+  'measure.allow': 'Ευχαρίστως',
+  'measure.decline': 'Όχι, ευχαριστώ',
+  'measure.later': 'Αλλάζει όποτε θέλεις στο «Προφίλ».',
+  'setup.privacy': 'Απόρρητο',
+  'setup.measureAds': 'Βοήθησε να μετράμε τις διαφημίσεις',
+  'setup.measureAdsHint': 'Η Google βλέπει ποια διαφήμιση σε έφερε. Ποτέ τι τρως ή πόσο ζυγίζεις.',
 };

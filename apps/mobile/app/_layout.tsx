@@ -63,6 +63,7 @@ import { paletteFor, ThemeContext, useColors } from '@/theme';
 import { registerForPush } from '@/lib/push';
 import { restoreReminders } from '@/lib/reminders';
 import { watchFunnel } from '@/lib/funnel';
+import { restoreConsent } from '@/lib/analytics';
 
 /*
  * Held until the fonts are in and the session has resolved.
@@ -298,6 +299,14 @@ function Gate() {
    * never handed one — see `lib/funnel.ts`.
    */
   useEffect(() => watchFunnel(), []);
+
+  /*
+   * Hands the stored measurement answer back to Firebase — see
+   * `restoreConsent` in `lib/analytics.ts`. A no-op until somebody has answered.
+   */
+  useEffect(() => {
+    void restoreConsent();
+  }, []);
 
   /*
    * Where a tap lands.

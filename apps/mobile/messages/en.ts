@@ -1564,4 +1564,16 @@ export const en = {
   'workout.whatKind': 'What kind of session?',
   'workout.lessNamed': (caption: string) => `Less ${caption}`,
   'workout.moreNamed': (caption: string) => `More ${caption}`,
+
+  /* The measurement question after the plan, and its row under You. See
+     `components/onboarding/MeasureAsk.tsx` and `lib/analytics.ts`. */
+  'measure.title': 'Help us see which ad worked?',
+  'measure.shared': 'Only which ad brought you here',
+  'measure.private': 'Never your meals or weight',
+  'measure.allow': 'Happy to help',
+  'measure.decline': 'No thanks',
+  'measure.later': 'Change it any time under You.',
+  'setup.privacy': 'Privacy',
+  'setup.measureAds': 'Help measure our ads',
+  'setup.measureAdsHint': 'Lets Google see which ad brought you here. Never what you eat or weigh.',
 } as const;

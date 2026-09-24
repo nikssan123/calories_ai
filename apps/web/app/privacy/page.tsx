@@ -29,12 +29,12 @@ export default function PrivacyPage() {
         name="Privacy Policy"
         path="/privacy"
         description={DESCRIPTION}
-        updated="2026-09-14"
+        updated="2026-09-24"
       />
       <LegalPage
       title="Privacy Policy"
       summary="You tell this app what you ate. That is health information, and it is treated as such: it is not sold, not used for advertising, not analysed for anyone but you, and it leaves the server only where the feature you asked for cannot work otherwise."
-      updated="2026-09-14"
+      updated="2026-09-24"
     >
       <Clause n={1} title="Who is responsible">
         <P>
@@ -147,9 +147,17 @@ export default function PrivacyPage() {
         </List>
 
         <P>
-          There is no analytics package, no advertising network, no third-party tracking script
-          and no fingerprinting SDK anywhere in this product. Nobody is paid for a view of your
-          data, and it is not sold, rented, or shared for anyone else&rsquo;s marketing.
+          There is one analytics package, and it is off unless you say yes. At the end of setup
+          the Android app asks whether Google may see which ad brought you to it; that is Google
+          Analytics for Firebase, and all it is ever told is that this install finished setting
+          up. Say no, or never answer, and it keeps no identifier and sends only anonymous pings
+          that Google cannot tie to you or your phone. Either way it is never sent a meal, a
+          weight, a goal or a target. You can change the answer under You &rarr; Privacy.
+        </P>
+        <P>
+          There is no advertising network, no third-party tracking script and no fingerprinting
+          SDK anywhere in this product. Nobody is paid for a view of your data, and it is not
+          sold, rented, or shared for anyone else&rsquo;s marketing.
         </P>
       </Clause>
 
@@ -174,6 +182,12 @@ export default function PrivacyPage() {
             Seeing which question new installs stop at, so the questions can be made shorter or
             clearer. Anonymous counts that identify nobody &mdash; legitimate interests, where they
             count as personal data at all.
+          </Row>
+          <Row label="Ad measurement">
+            Telling Google Ads which installs it paid for went on to set the app up, so the
+            advertising budget goes further. Your consent &mdash; Article 6(1)(a) &mdash; given
+            on the sheet at the end of setup and withdrawn with the switch under You &rarr;
+            Privacy.
           </Row>
           <Row label="Cost accounting">
             Knowing what a turn costs, so the service can be priced or stopped honestly.
@@ -223,7 +237,11 @@ export default function PrivacyPage() {
             send or delete. <b>Notifications on Android:</b> Firebase Cloud Messaging carries
             them, so Google is handed the push token and the text of the notification, and
             learns that a delivery happened. It is not given your meals; a reminder says only
-            what you would read on the lock screen.
+            what you would read on the lock screen. <b>Ad measurement on Android:</b> only if you
+            said yes at the end of setup, Google Analytics for Firebase tells Google Ads that
+            this install finished setting up, with the phone&rsquo;s advertising id so Google
+            can match it to the ad. Nothing about your meals, weight or goals goes with it.{' '}
+            <Out href="https://policies.google.com/privacy">Privacy policy</Out>.
           </Row>
           <Row label="Apple">
             Notifications on iPhone go the same way through the Apple Push Notification

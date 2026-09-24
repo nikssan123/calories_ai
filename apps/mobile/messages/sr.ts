@@ -1422,4 +1422,15 @@ export const sr: Messages = {
   'workout.whatKind': 'Која врста тренинга?',
   'workout.lessNamed': (caption: string) => `Мање: ${caption}`,
   'workout.moreNamed': (caption: string) => `Више: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Помажеш нам да видимо који оглас ради?',
+  'measure.shared': 'Само који те је оглас довео',
+  'measure.private': 'Никад твоје оброке или тежину',
+  'measure.allow': 'Радо',
+  'measure.decline': 'Не, хвала',
+  'measure.later': 'Промени кад год хоћеш у „Профилу“.',
+  'setup.privacy': 'Приватност',
+  'setup.measureAds': 'Помози нам да меримо огласе',
+  'setup.measureAdsHint': 'Google види који те је оглас довео. Никад шта једеш или колико тежиш.',
 };

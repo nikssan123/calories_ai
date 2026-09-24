@@ -1250,4 +1250,15 @@ export const bg: Messages = {
   'workout.whatKind': 'Какъв вид тренировка?',
   'workout.lessNamed': (caption: string) => `По-малко ${caption}`,
   'workout.moreNamed': (caption: string) => `Повече ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Помогни ни да видим коя реклама сработи',
+  'measure.shared': 'Само коя реклама те доведе',
+  'measure.private': 'Никога храната или теглото ти',
+  'measure.allow': 'С удоволствие',
+  'measure.decline': 'Не, благодаря',
+  'measure.later': 'Промени го по всяко време в „Профил“.',
+  'setup.privacy': 'Поверителност',
+  'setup.measureAds': 'Помогни ни да мерим рекламите',
+  'setup.measureAdsHint': 'Google вижда коя реклама те е довела. Никога какво ядеш или колко тежиш.',
 };

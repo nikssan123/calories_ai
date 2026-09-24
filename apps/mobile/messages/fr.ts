@@ -1260,4 +1260,15 @@ export const fr: Messages = {
   'workout.whatKind': 'Quel type de séance ?',
   'workout.lessNamed': (caption: string) => `Moins de ${caption}`,
   'workout.moreNamed': (caption: string) => `Plus de ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Nous aider à voir quelle pub marche ?',
+  'measure.shared': 'Seulement la pub qui t’a fait venir',
+  'measure.private': 'Jamais tes repas ni ton poids',
+  'measure.allow': 'Avec plaisir',
+  'measure.decline': 'Non merci',
+  'measure.later': 'Modifiable à tout moment dans « Profil ».',
+  'setup.privacy': 'Confidentialité',
+  'setup.measureAds': 'Aider à mesurer nos pubs',
+  'setup.measureAdsHint': 'Google voit quelle pub t’a fait venir. Jamais ce que tu manges ni ce que tu pèses.',
 };

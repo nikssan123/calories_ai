@@ -1414,4 +1414,15 @@ export const cs: Messages = {
   'workout.whatKind': 'Jaký druh cvičení?',
   'workout.lessNamed': (caption: string) => `Méně: ${caption}`,
   'workout.moreNamed': (caption: string) => `Víc: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Pomůžeš nám zjistit, která reklama funguje?',
+  'measure.shared': 'Jen která reklama tě přivedla',
+  'measure.private': 'Nikdy tvoje jídla ani váhu',
+  'measure.allow': 'Klidně',
+  'measure.decline': 'Ne, díky',
+  'measure.later': 'Kdykoli to změníš v „Profilu“.',
+  'setup.privacy': 'Soukromí',
+  'setup.measureAds': 'Pomoz nám měřit reklamy',
+  'setup.measureAdsHint': 'Google uvidí, která reklama tě přivedla. Nikdy, co jíš nebo kolik vážíš.',
 };

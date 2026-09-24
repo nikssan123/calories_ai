@@ -1380,4 +1380,15 @@ export const hu: Messages = {
   'workout.whatKind': 'Milyen edzés volt?',
   'workout.lessNamed': (caption: string) => `Kevesebb: ${caption}`,
   'workout.moreNamed': (caption: string) => `Több: ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Segítesz látni, melyik hirdetés működik?',
+  'measure.shared': 'Csak az, melyik hirdetés hozott ide',
+  'measure.private': 'Soha az étkezéseid vagy a súlyod',
+  'measure.allow': 'Szívesen',
+  'measure.decline': 'Nem, köszönöm',
+  'measure.later': 'Bármikor módosíthatod a „Profil” alatt.',
+  'setup.privacy': 'Adatvédelem',
+  'setup.measureAds': 'Segíts mérni a hirdetéseinket',
+  'setup.measureAdsHint': 'A Google látja, melyik hirdetés hozott ide. Soha, hogy mit eszel vagy mennyi a súlyod.',
 };

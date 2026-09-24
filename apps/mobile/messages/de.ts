@@ -1250,4 +1250,15 @@ export const de: Messages = {
   'workout.whatKind': 'Welche Art von Einheit?',
   'workout.lessNamed': (caption: string) => `Weniger ${caption}`,
   'workout.moreNamed': (caption: string) => `Mehr ${caption}`,
+
+  /* See `components/onboarding/MeasureAsk.tsx`. */
+  'measure.title': 'Hilfst du uns zu sehen, welche Anzeige wirkt?',
+  'measure.shared': 'Nur, welche Anzeige dich hergebracht hat',
+  'measure.private': 'Nie deine Mahlzeiten oder dein Gewicht',
+  'measure.allow': 'Gern',
+  'measure.decline': 'Nein, danke',
+  'measure.later': 'Jederzeit änderbar unter „Profil“.',
+  'setup.privacy': 'Datenschutz',
+  'setup.measureAds': 'Hilf uns, Anzeigen zu messen',
+  'setup.measureAdsHint': 'Google sieht, welche Anzeige dich hergebracht hat. Nie, was du isst oder wiegst.',
 };
