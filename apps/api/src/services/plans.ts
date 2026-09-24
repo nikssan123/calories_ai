@@ -628,29 +628,47 @@ export function limitsFor(plan: PlanName, unmetered = false): PlanLimits {
  * Where a free account is on the road `LIMITS.free` describes.
  *
  * `startedAt` is when the account was saved and the trial began; null is a
- * guest. It is wall-clock time rather than local days — the same rolling
- * arithmetic every other window in this file uses. `terms` are the account's
- * own, because how long the trial runs is part of what it was sold as.
+ * guest. `daysLogged` is how many distinct days this account has put something
+ * in the journal *since* then, and it is what spends the trial — not the
+ * calendar.
+ *
+ * ---- Why it stopped being a calendar ---------------------------------------
+ *
+ * It was `now.getTime() < startedAt + terms.days * 86_400_000`: three days from
+ * saving the account, whatever happened in them. That is the ordinary way to
+ * write a trial and it was measurably the wrong one here.
+ *
+ * In the twelve days after the ads started, thirty accounts arrived. Four came
+ * back for a second day. **None reached a third.** So the three days have never
+ * once been lived through: the window opened, the account left on day one, and
+ * the wall came down on an empty room three days later — along with the paywall
+ * that opens itself when the trial ends, performing to nobody. A trial that
+ * expires on a schedule its audience does not keep is not a trial, it is a
+ * timer.
+ *
+ * Counting days *used* fixes that without costing anything, because the trial's
+ * ceiling was never the calendar in the first place: the grant is nine messages
+ * and one photo, `period: 'ever'`, and `freeMeter` below hands out exactly that
+ * many however long they take. Somebody who logs on Tuesday and comes back a
+ * fortnight later has spent one of their three days and none of the nine extra
+ * messages — the bill is identical and the decision they are eventually asked
+ * to make is one they are present for.
+ *
+ * It is also strictly more generous than what it replaces, which is what makes
+ * it safe to apply to the seven-day accounts `TRIAL_LEGACY` grandfathers: no
+ * day can now be lost to not opening the app, so nobody's trial gets shorter
+ * than the one they were sold.
+ *
+ * `terms` are the account's own, because how long the trial runs is part of
+ * what it was sold as.
  */
 export function freeStage(
   startedAt: Date | null,
-  now = new Date(),
+  daysLogged: number,
   terms: TrialTerms = TRIAL,
 ): TrialStage {
   if (!startedAt) return 'guest';
-  return now.getTime() < trialEndsAt(startedAt, terms).getTime() ? 'trial' : 'ended';
-}
-
-/**
- * When this account's trial runs out.
- *
- * `terms` are the account's own — `users.trial_terms`, through `trialTerms` —
- * rather than `TRIAL`, so a trial that began on the week still gets the week.
- * Defaulted to today's for the callers that are asking about a trial nobody has
- * started yet.
- */
-export function trialEndsAt(startedAt: Date, terms: TrialTerms = TRIAL): Date {
-  return new Date(startedAt.getTime() + terms.days * 86_400_000);
+  return daysLogged < terms.days ? 'trial' : 'ended';
 }
 
 /**

@@ -9,7 +9,6 @@ import {
   limitsFor,
   meterFor,
   tiers,
-  trialEndsAt,
 } from '../src/services/plans.ts';
 import {
   allowanceFor,
@@ -21,6 +20,29 @@ import { startTrial } from '../src/services/trial.ts';
 import { accountGate, getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
 import { appFor, createUser, type TestUser } from './helpers/factories.ts';
+
+/**
+ * Puts `days` separate logged days on an account — which is what spends a
+ * trial now that `freeStage` counts days used rather than days elapsed.
+ *
+ * Dated from the trial's own start rather than from today, so a test that
+ * backdates `trial_started_at` still produces entries inside its trial. Called
+ * twice, the days overlap and the distinct count is simply the larger of the
+ * two, which is what every caller here wants.
+ */
+async function logDays(userId: string, days: number): Promise<void> {
+  await query(
+    `INSERT INTO food_entries (user_id, eaten_at, local_date, meal, description, created_at)
+     SELECT u.id, at.stamp, at.stamp::date, 'lunch', 'Test lunch', at.stamp
+       FROM users u
+       CROSS JOIN LATERAL (
+         SELECT COALESCE(u.trial_started_at, now()) + make_interval(days => d) AS stamp
+           FROM generate_series(0, $2::int - 1) AS d
+       ) AS at
+      WHERE u.id = $1`,
+    [userId, days],
+  );
+}
 
 /**
  * The entitlement seam.
@@ -92,24 +114,29 @@ describe('limitsFor', () => {
       period: 'ever',
     });
 
-    expect(trialEndsAt(started, TRIAL_LEGACY).getTime() - started.getTime()).toBe(
-      TRIAL_LEGACY.days * 86_400_000,
-    );
-    expect(trialEndsAt(started, TRIAL).getTime() - started.getTime()).toBe(TRIAL.days * 86_400_000);
-
     // An ended trial is withdrawn on either terms, and the kitchen is on neither.
     expect(freeMeter('ended', 'chat', TRIAL_LEGACY)).toEqual({ allowed: null, period: 'ever' });
     expect(freeMeter('trial', 'recipe', TRIAL_LEGACY)).toBeNull();
   });
 
-  it('puts an account on the road by when its trial started', () => {
-    const now = new Date('2026-09-20T12:00:00Z');
-    expect(freeStage(null, now)).toBe('guest');
-    expect(freeStage(new Date('2026-09-17T12:00:01Z'), now)).toBe('trial');
-    expect(freeStage(new Date('2026-09-17T12:00:00Z'), now)).toBe('ended');
-    // Same start, old terms: day six of seven, so it is still running.
-    expect(freeStage(new Date('2026-09-14T12:00:01Z'), now, TRIAL_LEGACY)).toBe('trial');
-    expect(freeStage(new Date('2026-09-14T12:00:01Z'), now, TRIAL)).toBe('ended');
+  it('puts an account on the road by the days it has logged, not the days since', () => {
+    const saved = new Date('2026-09-17T12:00:00Z');
+
+    // No account saved is a guest, however much has been logged.
+    expect(freeStage(null, 0)).toBe('guest');
+    expect(freeStage(null, 9)).toBe('guest');
+
+    // Saved and logging: the trial runs until the third day is written in.
+    expect(freeStage(saved, 0)).toBe('trial');
+    expect(freeStage(saved, TRIAL.days - 1)).toBe('trial');
+    expect(freeStage(saved, TRIAL.days)).toBe('ended');
+    expect(freeStage(saved, TRIAL.days + 4)).toBe('ended');
+
+    // Same three days on the old seven-day terms: still running, and would be
+    // whatever the calendar said — which is the whole change. An account that
+    // saves and disappears for a fortnight comes back to the trial it left.
+    expect(freeStage(saved, 3, TRIAL_LEGACY)).toBe('trial');
+    expect(freeStage(saved, TRIAL_LEGACY.days, TRIAL_LEGACY)).toBe('ended');
   });
 
   /** The kitchen is a tier, not an allowance, below `coach`. */
@@ -537,14 +564,26 @@ describe('the journal meter', () => {
       code: 'PLAN_LIMIT',
       allowance: { meter: 'chat', period: 'ever', trial: 'trial', resets_at: null },
     });
-    expect(response.json().allowance.trial_ends_at).toEqual(expect.any(String));
+    // No end date: the trial is spent in days logged, not days elapsed, so
+    // there is no instant to name. See `freeStage`.
+    expect(response.json().allowance.trial_ends_at).toBeNull();
   });
 
-  /** The clock is the clock: past the last day the model is gone, whatever was left. */
+  /**
+   * Days logged, not days since: an account that has written in the journal on
+   * `TRIAL.days` separate days is done, and one that has not is not — however
+   * long ago either of them saved.
+   */
   it('refuses every free AI turn once the trial has ended', async () => {
     await query(`UPDATE users SET trial_started_at = now() - interval '8 days' WHERE id = $1`, [
       user.id,
     ]);
+
+    // Eight days idle is still a live trial, which is the whole point of the
+    // change: nothing was used, so nothing was spent.
+    expect((await chat()).statusCode).toBe(200);
+
+    await logDays(user.id, TRIAL.days);
 
     const response = await chat();
     expect(response.statusCode).toBe(402);
@@ -858,7 +897,14 @@ describe('the free trial', () => {
     expect(second).toEqual(first);
 
     const allowance = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-22T23:00:00Z'));
-    expect(allowance).toMatchObject({ trial: 'trial', trial_ends_at: '2026-09-23T00:00:00.000Z' });
+    expect(allowance).toMatchObject({ trial: 'trial', trial_ends_at: null });
+
+    // Still running a week later, because nothing has been logged in it. The
+    // date it was started on no longer decides anything.
+    const later = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-29T00:00:00Z'));
+    expect(later).toMatchObject({ trial: 'trial' });
+
+    await logDays(user.id, TRIAL.days);
     const over = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-23T00:00:00Z'));
     expect(over).toMatchObject({ trial: 'ended', allowed: null });
   });
@@ -877,15 +923,17 @@ describe('the free trial', () => {
       JSON.stringify(TRIAL_LEGACY),
     ]);
 
-    const day5 = new Date(started.getTime() + 5 * 86_400_000);
-    expect(await allowanceFor(user.id, 'free', 'chat', false, day5)).toMatchObject({
+    // Five days logged is day five of seven on the old terms, and would be over
+    // twice on today's.
+    await logDays(user.id, 5);
+    expect(await allowanceFor(user.id, 'free', 'chat')).toMatchObject({
       trial: 'trial',
       allowed: TRIAL_LEGACY.chat,
-      trial_ends_at: new Date(started.getTime() + TRIAL_LEGACY.days * 86_400_000).toISOString(),
+      trial_ends_at: null,
     });
 
-    const day8 = new Date(started.getTime() + 8 * 86_400_000);
-    expect(await allowanceFor(user.id, 'free', 'chat', false, day8)).toMatchObject({
+    await logDays(user.id, TRIAL_LEGACY.days);
+    expect(await allowanceFor(user.id, 'free', 'chat')).toMatchObject({
       trial: 'ended',
       allowed: null,
     });

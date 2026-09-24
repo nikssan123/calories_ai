@@ -3,7 +3,7 @@ import { anthropicRate, openAiRate, priceUsage, round6 } from '../ai/pricing.ts'
 import { MODELS } from '../ai/client.ts';
 import type { ProviderId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
-import { freeMeter, freeStage, limitsFor, meterFor, trialEndsAt } from './plans.ts';
+import { freeMeter, freeStage, limitsFor, meterFor } from './plans.ts';
 import { creditBalance, spendCredit } from './credits.ts';
 import { trialNeverEnds } from './trial.ts';
 import {
@@ -211,16 +211,43 @@ async function turnsSince(userId: string, kinds: TurnKind[], since: Date): Promi
  */
 async function trialAccount(
   userId: string,
-): Promise<{ started: Date | null; terms: TrialTerms; endless: boolean }> {
-  const row = await queryOne<{ started: Date | null; terms: unknown; email: string | null }>(
-    `SELECT COALESCE(trial_started_at, email_verified_at) AS started, trial_terms AS terms, email
-       FROM users WHERE id = $1`,
+): Promise<{ started: Date | null; terms: TrialTerms; endless: boolean; daysLogged: number }> {
+  /*
+   * `days_logged` is what spends the trial — see `freeStage`. Distinct
+   * `local_date`, so three meals in one evening are one day, and counted from
+   * `created_at` rather than by comparing dates: `local_date` is the reader's
+   * logging day and the trial began at an instant, and an entry written at one
+   * in the morning belongs to the day it was typed on whichever of the two you
+   * ask. Comparing the timestamps needs no timezone and cannot be off by one.
+   *
+   * In the same round trip as the row it belongs to. This runs on the hot path
+   * of every chat turn, and a second query to count at most a handful of rows
+   * would be a network wait bought for nothing.
+   */
+  const row = await queryOne<{
+    started: Date | null;
+    terms: unknown;
+    email: string | null;
+    days_logged: number;
+  }>(
+    `SELECT COALESCE(u.trial_started_at, u.email_verified_at) AS started,
+            u.trial_terms AS terms,
+            u.email,
+            (SELECT count(DISTINCT f.local_date)
+               FROM food_entries f
+              WHERE f.user_id = u.id
+                AND f.created_at >= COALESCE(u.trial_started_at, u.email_verified_at))::int
+              AS days_logged
+       FROM users u WHERE u.id = $1`,
     [userId],
   );
   return {
     started: row?.started ? new Date(row.started) : null,
     terms: trialTerms(row?.terms),
     endless: trialNeverEnds(row?.email),
+    // Null `started` makes the subselect's comparison null and the count zero,
+    // which is also the right answer for a guest: nothing has been spent.
+    daysLogged: row?.days_logged ?? 0,
   };
 }
 
@@ -282,10 +309,18 @@ export async function allowanceFor(
       windowDays = TRIAL_LEGACY.days;
     } else {
       terms = account.terms;
-      trial = freeStage(account.started, now, terms);
+      trial = freeStage(account.started, account.daysLogged, terms);
       if (account.started) {
         since = account.started;
-        trialEnds = trialEndsAt(account.started, terms).toISOString();
+        /*
+         * No date, on purpose. The trial is spent in days used now, so there is
+         * no instant at which it runs out and nothing honest to put here — a
+         * projected one would be the app naming a deadline it does not enforce.
+         * Both screens that read this already fall back when it is null: the
+         * plans sheet says how many are left instead of when they go, and the
+         * You tab drops the date from the same row.
+         */
+        trialEnds = null;
       }
     }
     ({ allowed, period } = freeMeter(trial, meter, terms)!);
