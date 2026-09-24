@@ -679,7 +679,7 @@ export function WorkoutCard({
  * A modal is also what makes multi-select honest — the tick marks have somewhere
  * to live, and "Add 4" has a footer to sit in that does not move.
  */
-function PickerSheet({
+export function PickerSheet({
   open,
   types,
   chosen,

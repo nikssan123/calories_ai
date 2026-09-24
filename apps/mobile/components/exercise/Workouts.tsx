@@ -5,7 +5,7 @@ import type { ExerciseType, Routine, WeekSchedule } from '@ct/shared';
 import { WEEK_ORDER, weekdayName } from '@ct/shared';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { PressableChunk } from '@/components/Chunk';
-import { WorkoutCard } from '@/components/workout/WorkoutCard';
+import { PickerSheet, WorkoutCard } from '@/components/workout/WorkoutCard';
 import { api } from '@/lib/api';
 import { haptics } from '@/lib/haptics';
 import { font, type as t, useColors } from '@/theme';
@@ -350,6 +350,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
     routine?.exercises.map((e) => ({ name: e.name, typeId: e.type_id, sets: e.target_sets ?? 3 })) ??
       [],
   );
+  const [picking, setPicking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -369,6 +370,23 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
   const byDuration = chosen.length === 0 && (routine?.duration_min ?? null) !== null;
   const ready = name.trim().length > 0 && (chosen.length > 0 || byDuration) && !saving;
   const picked = new Set(chosen.map((c) => c.typeId));
+
+  function add(types: ExerciseType[]) {
+    haptics.press();
+    setChosen((prev) => [...prev, ...types.map((type) => ({ name: type.name, typeId: type.id, sets: 3 }))]);
+    setPicking(false);
+  }
+
+  /** Teaching the app one it has never heard of, as the workout card does. */
+  async function define(exercise: string) {
+    try {
+      const { type } = await api.defineExercise({ name: exercise, category: routine?.category ?? 'strength' });
+      setTypes((prev) => (prev ? [type, ...prev.filter((t) => t.id !== type.id)] : [type]));
+      add([type]);
+    } catch (e) {
+      setError(messageOf(e, tr));
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -440,37 +458,32 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
           </View>
         ))}
 
-        {types === null ? (
-          <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
-        ) : (
-          <View style={styles.chips}>
-            {types
-              .filter((type) => !picked.has(type.id))
-              .map((type) => (
-                <Pressable
-                  key={type.id}
-                  onPress={() => {
-                    haptics.press();
-                    setChosen((prev) => [...prev, { name: type.name, typeId: type.id, sets: 3 }]);
-                  }}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.chip,
-                    {
-                      backgroundColor: colors.glassStrong,
-                      borderColor: colors.glassEdge,
-                      boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
-                    {type.emoji} {type.name}
-                  </Text>
-                </Pressable>
-              ))}
-          </View>
-        )}
+        {/*
+          The same full-screen picker the workout card opens. This used to lay
+          the whole catalogue out inline as chips — a hundred-odd of them, with
+          Save pushed below the lot.
+        */}
+        <Pressable
+          onPress={() => {
+            haptics.press();
+            setPicking(true);
+          }}
+          accessibilityRole="button"
+          hitSlop={6}
+          style={({ pressed }) => [styles.addRow, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={[t.footnoteBold, { color: colors.exerciseText }]}>
+            {tr('workout.addExercises')}
+          </Text>
+        </Pressable>
+        <PickerSheet
+          open={picking}
+          types={types}
+          chosen={picked}
+          onClose={() => setPicking(false)}
+          onAdd={add}
+          onDefine={(exercise) => void define(exercise)}
+        />
 
         <View style={styles.editorFoot}>
           <Pressable onPress={onDone} accessibilityRole="button" hitSlop={8}>
@@ -591,8 +604,7 @@ const styles = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepButton: { width: 28, height: 28, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   stepValue: { width: 48, textAlign: 'center' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  addRow: { paddingVertical: 4 },
   editorFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   save: { paddingHorizontal: 18, paddingVertical: 9 },
 });
