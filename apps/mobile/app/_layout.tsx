@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -316,13 +316,45 @@ function Gate() {
    * opens Progress, a nudge opens the journal it also appears in. Anything
    * unrecognised is left alone — opening the app at all is a reasonable answer
    * to a notification whose destination we cannot parse.
+   *
+   * And not until the app is on screen. On Android the tap reaches JS through
+   * the activity's new intent, which comes before it resumes — so a push made on
+   * the spot switches tab while the host is still paused, and the tab's glide
+   * and the bar's cross-fade start against views the UI thread is not yet
+   * mounting. What came back, after a night away and the evening reminder, was
+   * a black page under a bar with two tabs lit, until a tab switch redrew both.
+   * Waiting for `active`, and then for a frame, makes the switch an ordinary one.
    */
   useEffect(() => {
+    let waiting: { remove: () => void } | null = null;
+    let frame: number | null = null;
+    const whenShowing = (go: () => void) => {
+      waiting?.remove();
+      waiting = null;
+      if (frame !== null) cancelAnimationFrame(frame);
+      const next = () => {
+        frame = requestAnimationFrame(() => {
+          frame = null;
+          go();
+        });
+      };
+      if (AppState.currentState === 'active') return next();
+      waiting = AppState.addEventListener('change', (state) => {
+        if (state !== 'active') return;
+        waiting?.remove();
+        waiting = null;
+        next();
+      });
+    };
     const tap = Notifications.addNotificationResponseReceivedListener((response) => {
       const route = response.notification.request.content.data?.route;
-      if (typeof route === 'string' && route.startsWith('/')) router.push(route as never);
+      if (typeof route === 'string' && route.startsWith('/')) whenShowing(() => router.push(route as never));
     });
-    return () => tap.remove();
+    return () => {
+      tap.remove();
+      waiting?.remove();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   }, [router]);
 
   return (
