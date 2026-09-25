@@ -66,7 +66,7 @@ export function UsersPanel() {
     setBusy(user.id);
     try {
       await action();
-      toast.success(`${label} — ${user.email}`);
+      toast.success(`${label} — ${user.email ?? 'Guest'}`);
       await load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -270,7 +270,7 @@ export function UsersPanel() {
               const user = confirming;
               setConfirming(null);
               void run(user, 'Account deleted', () =>
-                api.admin.deleteUser(user.id, user.email ?? ''),
+                api.admin.deleteUser(user.id, user.email),
               );
             }}
           >
@@ -278,14 +278,14 @@ export function UsersPanel() {
               autoFocus
               value={confirmText}
               onChange={(event) => setConfirmText(event.target.value)}
-              placeholder={`Type ${confirming.email} to confirm`}
+              placeholder={`Type ${confirmPhrase(confirming)} to confirm`}
               className="flex-1"
             />
             <div className="flex gap-2">
               <Button
                 type="submit"
                 variant="destructive"
-                disabled={confirmText.trim().toLowerCase() !== (confirming.email ?? '').toLowerCase()}
+                disabled={confirmText.trim().toLowerCase() !== confirmPhrase(confirming).toLowerCase()}
               >
                 Delete permanently
               </Button>
@@ -298,6 +298,11 @@ export function UsersPanel() {
       )}
     </div>
   );
+}
+
+/** What deleting this account asks to be typed: its email, or for a guest, "delete". */
+function confirmPhrase(user: AdminUser): string {
+  return user.email ?? 'delete';
 }
 
 /**

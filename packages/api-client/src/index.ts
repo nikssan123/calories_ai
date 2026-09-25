@@ -1372,11 +1372,14 @@ export function createApiClient({
           body: JSON.stringify({ disabled }),
         }),
 
-      /** Irreversible. `confirmEmail` must match the account's own address. */
-      deleteUser: (id: string, confirmEmail: string) =>
+      /**
+       * Irreversible. `confirmEmail` must match the account's own address; an
+       * account with no address (a guest) passes null and confirms by its id.
+       */
+      deleteUser: (id: string, confirmEmail: string | null) =>
         request<{ ok: true }>(`/admin/users/${id}`, {
           method: 'DELETE',
-          body: JSON.stringify({ confirm_email: confirmEmail }),
+          body: JSON.stringify(confirmEmail ? { confirm_email: confirmEmail } : { confirm_id: id }),
         }),
 
       runReview: (id: string) =>

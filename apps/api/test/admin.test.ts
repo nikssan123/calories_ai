@@ -587,8 +587,8 @@ describe('actions', () => {
       expect(response.statusCode).toBe(404);
     });
 
-    /** The pre-accounts placeholder row has no email, so nothing can confirm it. */
-    it('cannot confirm an account that has no email', async () => {
+    /** An account with no email cannot be confirmed by an empty one. */
+    it('cannot confirm an account that has no email with an empty email', async () => {
       const legacy = await queryOne<{ id: string }>(
         `INSERT INTO users (display_name) VALUES ('legacy') RETURNING id`,
       );
@@ -600,6 +600,28 @@ describe('actions', () => {
       });
       expect(response.statusCode).toBe(400);
       expect(await query('SELECT id FROM users WHERE id = $1', [legacy!.id])).toHaveLength(1);
+    });
+
+    /** A guest who stated a child's age is listed to be dealt with, so it must be deletable. */
+    it('deletes an account with no email when confirmed by its id', async () => {
+      const guest = await queryOne<{ id: string }>(
+        `INSERT INTO users (display_name, stated_age) VALUES ('guest', 12) RETURNING id`,
+      );
+      const wrong = await app.inject({
+        method: 'DELETE',
+        url: `/admin/users/${guest!.id}`,
+        headers: { cookie },
+        payload: { confirm_id: member.id },
+      });
+      expect(wrong.statusCode).toBe(400);
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/users/${guest!.id}`,
+        headers: { cookie },
+        payload: { confirm_id: guest!.id },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(await query('SELECT id FROM users WHERE id = $1', [guest!.id])).toHaveLength(0);
     });
 
     it('returns null rather than throwing for a missing account', async () => {

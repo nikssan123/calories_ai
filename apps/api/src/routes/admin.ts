@@ -648,13 +648,19 @@ export async function registerAdminRoutes(app: FastifyInstance) {
    * Deleting an account is the one irreversible action here, so it takes the
    * email as confirmation in the body — the same shape every "type the name to
    * confirm" dialogue uses, and it survives a misdirected click on a row.
+   *
+   * A guest has no email to type, and the panel lists exactly the guests most
+   * in need of deleting — the ones who told the journal they are a child. They
+   * confirm with their own id instead.
    */
-  const DeleteBody = z.object({ confirm_email: z.string().min(1) });
+  const DeleteBody = z
+    .object({ confirm_email: z.string().min(1).optional(), confirm_id: z.string().min(1).optional() })
+    .refine((body) => body.confirm_email || body.confirm_id);
 
   app.delete('/admin/users/:id', async (request, reply) => {
     const parsed = DeleteBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.status(400).send({ error: 'Send { confirm_email } to confirm.' });
+      return reply.status(400).send({ error: 'Send { confirm_email } or { confirm_id } to confirm.' });
     }
 
     const id = (request.params as any).id as string;
@@ -664,20 +670,24 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
     const user = await getAdminUser(id);
     if (!user) return reply.status(404).send({ error: 'User not found' });
-    // An account with no email — the pre-accounts placeholder row — can never
-    // be confirmed, which is the right answer rather than a special case.
-    if (user.email?.toLowerCase() !== parsed.data.confirm_email.trim().toLowerCase()) {
-      return reply.status(400).send({ error: "That email doesn't match this account." });
+    const confirmed = user.email
+      ? user.email.toLowerCase() === parsed.data.confirm_email?.trim().toLowerCase()
+      : parsed.data.confirm_id === id;
+    if (!confirmed) {
+      return reply.status(400).send({
+        error: user.email ? "That email doesn't match this account." : "That id doesn't match this account.",
+      });
     }
 
     const summary = await deleteAccount(id);
     // The same receipt someone gets when they close their own account. An
     // administrator deleting it does not make the owner less entitled to know
     // what happened to their year of meals.
-    if (summary) {
+    // A guest has nowhere to send it.
+    if (summary && user.email) {
       await sendAccountDeletedEmail(
         {
-          email: user.email!,
+          email: user.email,
           name: user.display_name,
           counts: { ...summary, photos: summary.photos.length },
           // The owner's language, not the operator's. Read off `user`, which
