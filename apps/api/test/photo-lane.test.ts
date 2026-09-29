@@ -258,6 +258,21 @@ describe('POST /entries/photo', () => {
     expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('Already logged');
   });
 
+  /**
+   * "One chip", then a photo of one chip held over the bag, which on
+   * 2026-09-29 logged the whole bag: the portion was in the sentence before.
+   */
+  it('tells the model what they typed just before the photo, and only that', async () => {
+    await query(`INSERT INTO chat_messages (user_id, role, content, created_at) VALUES ($1, 'user', 'Porridge', now() - interval '20 minutes')`, [user.id]);
+    await query(`INSERT INTO chat_messages (user_id, role, content) VALUES ($1, 'user', 'One chip')`, [user.id]);
+    await scriptPlate();
+    expect((await post({ photo_base64: PIXEL })).statusCode).toBe(200);
+    const turn = userTurnOf(agentCalls.at(-1)!);
+    expect(turn).toContain('What they typed just before sending this photograph:\n- "One chip"');
+    expect(turn).not.toContain('Porridge');
+    expect(systemPromptOf(agentCalls.at(-1)!)).toContain('outrank it on how much');
+  });
+
   it('turns a failed run into a 502 and still counts it', async () => {
     scriptAgent({ throws: 'model fell over' });
     const response = await post({ photo_base64: PIXEL });

@@ -529,7 +529,13 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     'Correct an entry that is already logged, e.g. when the user says "there was more rice" or "that was actually a large one". Replaces the item list, so send the full corrected set of items, not just the changed one. Use this instead of logging a compensating second entry.',
     {
       entry_id: z.string().describe('The id of the entry to correct.'),
-      description: z.string().nullable().default(null),
+      description: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe(
+          'A new label for the whole meal. Send one whenever the corrected items no longer match the old label — "Bag of potato chips" corrected to a single chip is "Potato chip". Null only when the old label still fits.',
+        ),
       meal: mealField.nullable().default(null),
       when: whenField,
       items: z

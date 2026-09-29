@@ -25,9 +25,10 @@ import { buildNutritionServer, type ToolContext } from './tools.ts';
  * What it gives up is deliberate: no history, so it cannot know that "the
  * usual" means oats; no correction tools, so a wrong reading is fixed with a
  * typed sentence in the journal, which routes through the full turn. A photo
- * with words under it never comes here. The one thing it is told about the
- * journal is what went in during the last few minutes — see
- * `JUST_LOGGED_MINUTES`.
+ * with words under it never comes here. The two things it is told about the
+ * journal are what went in during the last few minutes — see
+ * `JUST_LOGGED_MINUTES` — and what they typed just before the shutter — see
+ * `JUST_SAID_MINUTES`.
  */
 
 /*
@@ -45,6 +46,7 @@ You are reading one photograph of one meal, and nothing else. There is no conver
 - Then reply with one short sentence naming what you logged. No questions, no advice, no numbers — the card carries the numbers.
 - If there is genuinely no food in the photograph, do not call the tool; say so in one sentence.
 - If the message lists something logged in the last few minutes and the photograph is plainly that same thing — the packet that was just scanned, the plate that was just photographed — do not call the tool; say in one sentence that it is already in today's log. Only when it is unmistakably the same product or plate: a second one of something, or anything you are unsure about, is logged.
+- If the message quotes what they typed just before sending the photograph, those words are about this photograph, and they outrank it on how much: "one chip" over an open packet is one chip, not the packet. The picture tells you what the food is; their words, where they say, tell you how much of it.
 - Whichever sentence you write, write it in the language named below, if one is. That includes the names of the foods: they were not given to you in any language, so they take the reply's.`;
 
 /**
@@ -76,6 +78,35 @@ async function justLoggedBrief(userId: string, now: Date): Promise<string | null
     return `- ${row.description} (${how}, ${when})`;
   });
   return ['Already logged in the last few minutes:', ...lines].join('\n');
+}
+
+/**
+ * How far back "just said" reaches.
+ *
+ * On 2026-09-29 a new guest typed "One chip", was asked what it was from, and
+ * answered with a photo of a single chip held over an open bag. The photo came
+ * here, where there is no history, and the whole bag went in at 135 kcal: the
+ * one sentence that said how much had been typed a message earlier. Words sent
+ * a few minutes before the shutter are almost always about the picture; a
+ * quarter of an hour would start reaching back into the last meal.
+ */
+const JUST_SAID_MINUTES = 5;
+
+/** What they typed moments before the photo, oldest first, so the portion they named survives the lane. */
+async function justSaidBrief(userId: string, now: Date): Promise<string | null> {
+  const rows = await query<{ content: string }>(
+    `SELECT content FROM (
+       SELECT content, created_at FROM chat_messages
+        WHERE user_id = $1 AND role = 'user' AND content <> ''
+          AND created_at > $2::timestamptz - make_interval(mins => $3)
+        ORDER BY created_at DESC
+        LIMIT 3
+     ) recent ORDER BY created_at ASC`,
+    [userId, now.toISOString(), JUST_SAID_MINUTES],
+  );
+  if (rows.length === 0) return null;
+  const lines = rows.map((row) => `- "${row.content.trim().slice(0, 300)}"`);
+  return ['What they typed just before sending this photograph:', ...lines].join('\n');
 }
 
 export interface PhotoLaneInput {
@@ -144,7 +175,13 @@ export async function logPhotoOnly(
     // it is a fraction of that prefix's size, which is the point of the lane.
     staticSystemPrompt: `${PHOTO_ESTIMATION_PROMPT}\n\n---\n\n${PHOTO_LANE_PROMPT}`,
     dynamicSystemPrompt: '',
-    text: ['Log this meal.', await justLoggedBrief(id, now), languageBrief(language), unitsBrief({ units })]
+    text: [
+      'Log this meal.',
+      await justSaidBrief(id, now),
+      await justLoggedBrief(id, now),
+      languageBrief(language),
+      unitsBrief({ units }),
+    ]
       .filter(Boolean)
       .join('\n\n'),
     photo:
