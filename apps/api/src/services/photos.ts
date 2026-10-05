@@ -128,9 +128,11 @@ export async function reservePhotoUpload(
  * and went on failing until the day rolled over. A photo poisoned the rest of
  * the conversation.
  *
- * So the ceiling is `shouldStartFreshSession` in `ai/run.ts`: a session is cut
- * at the local-day rollover, which with the 04:00 rule and any timezone puts
- * the longest a live transcript can hold this URL at a little over a day.
+ * So the ceiling is `resumableSessionId` in `ai/run.ts`: a session is resumed
+ * only on the local day it was last used, which with the 04:00 rule and any
+ * timezone puts the longest a live transcript can hold this URL at a little
+ * over a day. It used to be read off the conversation instead, and a weekly
+ * review posted into it kept a five-day-old session alive past this number.
  * Forty-eight hours clears that with room, and is well inside the seven-day
  * maximum a SigV4 query signature can carry.
  *

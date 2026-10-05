@@ -258,6 +258,9 @@ async function photoSecret(row: { photo_id: string | null }): Promise<string | n
  * stop — yesterday's meals running into this morning's photograph. A nudge is
  * deliberately still counted: the user may be answering it, and dropping the
  * history under their reply would leave the model reading half a conversation.
+ *
+ * That is true of a replayed transcript and of nothing else. A session never
+ * held the nudge, so it is resumed on `sessionLastUsedAt` below instead.
  */
 export async function lastMessageAt(userId: string): Promise<Date | null> {
   const row = await queryOne<{ created_at: string }>(
@@ -265,6 +268,34 @@ export async function lastMessageAt(userId: string): Promise<Date | null> {
       WHERE user_id = $1 AND tool_trace->>'kind' IS DISTINCT FROM 'scan'
    ORDER BY created_at DESC LIMIT 1`,
     [userId],
+  );
+  return row ? new Date(row.created_at) : null;
+}
+
+/**
+ * When a stored agent session last ran a turn, for deciding whether to resume it.
+ *
+ * `lastMessageAt` cannot answer this, and the difference reached a user. It
+ * reads the conversation, and the conversation holds things no session ever
+ * saw — a nudge, a weekly review, a coach's comment. On 2026-10-05 a weekly
+ * review was posted at 05:42 UTC, which made that morning's first typed
+ * message look like a continuation: of a session last used four days earlier,
+ * still holding a photo whose presigned read had long expired. Every turn of
+ * the day failed on it with `400 Unable to download the file`.
+ *
+ * So this asks the session rather than the conversation. A journal turn records
+ * the session that wrote it on its reply, and nothing else writes that field,
+ * so no other kind of row can stand in for one — including the kinds that do
+ * not exist yet, which is what a list of exceptions on `lastMessageAt` would
+ * have gone on missing. Null when no reply carries the id: a session nothing
+ * vouches for is not one to resume.
+ */
+export async function sessionLastUsedAt(userId: string, sessionId: string): Promise<Date | null> {
+  const row = await queryOne<{ created_at: string }>(
+    `SELECT created_at FROM chat_messages
+      WHERE user_id = $1 AND tool_trace->>'session_id' = $2
+   ORDER BY created_at DESC LIMIT 1`,
+    [userId, sessionId],
   );
   return row ? new Date(row.created_at) : null;
 }

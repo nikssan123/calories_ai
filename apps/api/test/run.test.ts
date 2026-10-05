@@ -55,6 +55,16 @@ async function setSession(id: string | null) {
   await query('UPDATE users SET agent_session_id = $1 WHERE id = $2', [id, user.id]);
 }
 
+/** A reply written by `id`, which is the only thing that vouches for a session. */
+async function seedSessionTurn(id: string, daysAgo = 0) {
+  await query(
+    `INSERT INTO chat_messages (user_id, role, content, tool_trace, created_at)
+     VALUES ($1, 'assistant', 'Logged.', $2, now() - ($3 || ' days')::interval)`,
+    [user.id, JSON.stringify({ kind: 'text_log', session_id: id }), String(daysAgo)],
+  );
+  await setSession(id);
+}
+
 async function storedSession(): Promise<string | null> {
   const row = await queryOne<{ agent_session_id: string | null }>(
     'SELECT agent_session_id FROM users WHERE id = $1',
@@ -128,12 +138,70 @@ describe('when the agent session is dropped', () => {
        SELECT $1, 'user', 'chatter' FROM generate_series(1, $2)`,
       [user.id, MAX_SESSION_MESSAGES - 10],
     );
-    await setSession('sess-busy');
+    await seedSessionTurn('sess-busy');
     scriptAgent({ text: 'Logged.' });
 
     await turn('one more');
 
     expect(agentCalls.at(-1)!.resume).toBe('sess-busy');
+  });
+
+  /**
+   * 2026-10-05, as it happened. A session last used four days ago, holding a
+   * photo by a URL signed for two; then a weekly review posted this morning,
+   * which is a message in the conversation and so made the day look continued.
+   * The session was resumed and every turn failed on the expired URL.
+   */
+  it.each(['weekly_review', 'nudge'])(
+    'does not resume an old session because a %s was posted today',
+    async (kind) => {
+      await seedPriorTurn(4);
+      await seedSessionTurn('sess-old', 4);
+      await query(
+        `INSERT INTO chat_messages (user_id, role, content, tool_trace)
+         VALUES ($1, 'assistant', 'Only two days logged this week.', $2)`,
+        [user.id, JSON.stringify({ kind })],
+      );
+      scriptAgent({ text: 'Logged.', sessionId: 'sess-today' });
+
+      await turn('one boiled egg');
+
+      expect(agentCalls.at(-1)!.resume).toBeUndefined();
+      expect(await storedSession()).toBe('sess-today');
+    },
+  );
+
+  it('does not resume a session that no reply was ever written by', async () => {
+    await seedPriorTurn(0);
+    await setSession('sess-unvouched');
+    scriptAgent({ text: 'Logged.', sessionId: 'sess-today' });
+
+    await turn('one boiled egg');
+
+    expect(agentCalls.at(-1)!.resume).toBeUndefined();
+  });
+
+  /**
+   * The same failure arriving anyway — a session resumed in good faith whose
+   * photo will not download. It costs the thread, not the message.
+   */
+  it('starts over when the resumed session holds a photo that has expired', async () => {
+    scriptAgent({ text: 'One.', sessionId: 'sess-a' });
+    await turn();
+
+    scriptAgent(
+      {
+        throws:
+          'Claude Code returned an error result: API Error: 400 Unable to download the file. Please verify the URL and try again.',
+      },
+      { text: 'Recovered.', sessionId: 'sess-b' },
+    );
+    const response = await turn('one boiled egg');
+
+    expect(response.message.content).toBe('Recovered.');
+    expect(agentCalls.at(-2)!.resume).toBe('sess-a');
+    expect(agentCalls.at(-1)!.resume).toBeUndefined();
+    expect(await storedSession()).toBe('sess-b');
   });
 });
 

@@ -9,6 +9,7 @@ import {
   lastMessageAt,
   listMessages,
   listReplayWindow,
+  sessionLastUsedAt,
 } from '../services/chat.ts';
 import { isUnderAge, underAgeReply } from '../services/age.ts';
 import { latestWeight } from '../services/log.ts';
@@ -376,7 +377,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     maxTurns: MAX_TURNS,
   };
 
-  const sessionId = fresh ? null : await loadSessionId(input.userId);
+  const sessionId = fresh ? null : await resumableSessionId(input, today);
 
   let outcome = await drive(provider, request, sessionId, emit);
   if (outcome.staleSession) {
@@ -708,6 +709,30 @@ function startOfLocalDay(localDate: string, ctx: DayContext): Date {
     if (localDateFor(at, ctx) === localDate) return at;
   }
   return candidate;
+}
+
+/**
+ * The stored session, when this turn may still resume it.
+ *
+ * `shouldStartFreshSession` reads the conversation, and that is the right
+ * thing to cut a replayed transcript by. It is not enough to resume a session
+ * by, because the conversation is written to by things the session never ran:
+ * a nudge or a weekly review posted this morning makes the day look continued
+ * while the session it would continue is days old. Resuming that is not merely
+ * the stale transcript the rule exists to stop — a photo in it is an image
+ * block holding a presigned read, re-fetched on every turn and long expired,
+ * and one dead URL fails the turn before the model has read a word.
+ *
+ * So the session has to have been used today itself. This is the bound
+ * `MODEL_READ_SECONDS` in `services/photos.ts` is sized against: every turn of
+ * a session then falls on the local day it began, which keeps the oldest URL
+ * it can hold about a day old.
+ */
+async function resumableSessionId(input: RunTurnInput, today: string): Promise<string | null> {
+  const sessionId = await loadSessionId(input.userId);
+  if (!sessionId) return null;
+  const usedAt = await sessionLastUsedAt(input.userId, sessionId);
+  return usedAt !== null && localDateFor(usedAt, input.ctx) === today ? sessionId : null;
 }
 
 async function loadSessionId(userId: string): Promise<string | null> {

@@ -15,6 +15,22 @@ import { EMPTY_USAGE, type Outcome, type StreamSink, type TokenUsage } from './p
 
 export type AgentPrompt = string | AsyncIterable<SDKUserMessage>;
 
+/**
+ * The failures that mean the session is the problem rather than the turn.
+ *
+ * A session that is gone, and one that is still there and cannot be replayed.
+ * The second is a transcript holding an image by URL: the API re-fetches it on
+ * every resume, and once the presigned read has expired the whole request is
+ * refused with `400 Unable to download the file` — whatever this turn was
+ * asking. `ai/run.ts` is meant to stop such a session being resumed at all;
+ * this is for the day it does not, so that the cost is the conversation's
+ * thread and not every message the person sends.
+ *
+ * It also matches when the photo that will not download is this turn's own.
+ * The retry then fails the same way with nothing to resume, and is reported.
+ */
+const UNRESUMABLE = /session|resume|not found|unable to download the file/i;
+
 export async function executeAgent(
   prompt: AgentPrompt,
   options: Options,
@@ -69,7 +85,7 @@ export async function executeAgent(
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    if (resume && /session|resume|not found/i.test(detail)) {
+    if (resume && UNRESUMABLE.test(detail)) {
       return { ...outcome, staleSession: true };
     }
     return { ...outcome, error: detail };

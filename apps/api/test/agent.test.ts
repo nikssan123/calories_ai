@@ -100,6 +100,28 @@ describe('executeAgent', () => {
     expect(outcome.error).toBeUndefined();
   });
 
+  /**
+   * The session is still there and cannot be replayed: a photo in it is held by
+   * a presigned URL, re-fetched on every resume, and the URL has expired. The
+   * wording is the API's own, as it reached `ai_usage` on 2026-10-05.
+   */
+  it('flags a session holding a photo that can no longer be fetched', async () => {
+    scriptAgent({
+      throws:
+        'Claude Code returned an error result: API Error: 400 Unable to download the file. Please verify the URL and try again.',
+    });
+    const outcome = await executeAgent('log it', OPTIONS, 'session-123');
+    expect(outcome.staleSession).toBe(true);
+    expect(outcome.error).toBeUndefined();
+  });
+
+  it('reports this turn’s own photo failing to download, with nothing to resume', async () => {
+    scriptAgent({ throws: 'API Error: 400 Unable to download the file.' });
+    const outcome = await executeAgent('log it', OPTIONS, null);
+    expect(outcome.staleSession).toBeUndefined();
+    expect(outcome.error).toBe('API Error: 400 Unable to download the file.');
+  });
+
   it('does not mistake an unrelated failure for a stale session', async () => {
     scriptAgent({ throws: 'network unreachable' });
     const outcome = await executeAgent('log it', OPTIONS, 'session-123');
