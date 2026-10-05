@@ -481,6 +481,36 @@ export const BROWSABLE_TABLES: Record<string, TableSpec> = {
     order: 'day DESC',
     note: 'How many new installs reached each first-run screen, per day. Counts only — the Funnel tab reads it.',
   },
+  content_topics: {
+    group: 'Ops',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Blog subjects, decided once in English and briefed to every language.',
+  },
+  content_posts: {
+    group: 'Ops',
+    redact: [],
+    order: 'updated_at DESC',
+    note: 'One post per topic per language. Only `published` rows are on the site.',
+  },
+  content_suggestions: {
+    group: 'Ops',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Every subject the planner has offered, whatever became of it — its memory of what not to repeat.',
+  },
+  content_jobs: {
+    group: 'Ops',
+    redact: [],
+    order: 'started_at DESC',
+    note: 'A batch of posts being written, language by language. `errors` says why one failed.',
+  },
+  social_queue: {
+    group: 'Ops',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Rendered social posts and what was decided about each. The Social tab is a nicer view of the same rows.',
+  },
   app_secrets: {
     group: 'Ops',
     redact: ['value'],

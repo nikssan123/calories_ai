@@ -101,10 +101,13 @@ describe('streaks', () => {
     await runDueAlerts(new Date('2026-03-19T19:00:00Z'));
     await runDueAlerts(new Date('2026-03-19T20:00:00Z'));
 
-    expect((await listAlerts(user.id)).filter((a) => a.kind === 'streak')).toHaveLength(1);
+    const streaks = (await listAlerts(user.id)).filter((a) => a.kind === 'streak');
+    expect(streaks).toHaveLength(1);
     // And the relay heard about it exactly once, which is the half of this the
-    // reader would actually notice.
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    // reader would actually notice. Counted by the alert a push carries rather
+    // than by calls: the later passes are past the recap hour, and since 068
+    // the recap is on by default — a second push that evening, and not this one.
+    expect(pushedAlerts(fetchImpl).filter((id) => id === streaks[0]!.id)).toHaveLength(1);
     vi.unstubAllGlobals();
   });
 
@@ -608,5 +611,13 @@ function pushOk() {
         json: async () => ({ data: [{ status: 'ok', id: 'x' }] }),
         text: async () => '',
       }) as unknown as Response,
+  );
+}
+
+/** Which alert each message handed to the relay was about, in the order sent. */
+function pushedAlerts(fetchImpl: ReturnType<typeof pushOk>): string[] {
+  const calls = fetchImpl.mock.calls as unknown as [string, RequestInit][];
+  return calls.flatMap(([, init]) =>
+    (JSON.parse(String(init.body)) as { data: { alert: string } }[]).map((m) => m.data.alert),
   );
 }

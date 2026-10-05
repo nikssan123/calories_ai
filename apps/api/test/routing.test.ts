@@ -233,6 +233,8 @@ describe('OpenAI-compatible providers', () => {
       recipe: 'gpt-4o',
       nudge: 'gpt-4o',
       meal_plan: 'gpt-4o',
+      content: 'gpt-4o',
+      content_plan: 'gpt-4o',
     });
   });
 
